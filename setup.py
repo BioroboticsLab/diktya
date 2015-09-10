@@ -13,9 +13,6 @@ setup(name='beras',
             "pytest>=2.7.2",
             "seya"
       ],
-      dependency_links=[
-        "git+https://github.com/EderSantana/seya.git@53a6eb6c0f5e5c7036f95ca631a3adcb00b57dc8#egg=seya"
-      ],
       packages=['beras',
                 'beras.layers']
       )

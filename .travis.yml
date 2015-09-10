@@ -17,6 +17,8 @@ install:
   - conda info -a
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy theano pytest
   - source activate test-environment
+  - pip install git+https://github.com/berleon/seya.git@ce0401f273199fd8f68533d1c9abb6df88edfbc6#egg=seya
   - pip install .
 script:
   - py.test
+
