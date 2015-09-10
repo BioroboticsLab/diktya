@@ -11,6 +11,7 @@ setup(name='beras',
             "numpy>=1.9,<1.10",
             "keras>=0.1.3",
             "pytest>=2.7.2",
+            "scikit-image>=0.11.3",
             "seya"
       ],
       packages=['beras',
