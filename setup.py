@@ -10,7 +10,8 @@ setup(name='beras',
       install_requires=[
             "numpy>=1.9,<1.10",
             "keras>=0.1.3",
-            "pytest>=2.7.2"
+            "pytest>=2.7.2",
+            "seya"
       ],
       dependency_links=[
         "git+https://github.com/EderSantana/seya.git@53a6eb6c0f5e5c7036f95ca631a3adcb00b57dc8#egg=seya"
