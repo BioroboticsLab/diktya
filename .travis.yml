@@ -4,21 +4,19 @@ python:
   - "3.3"
   - "3.4"
 install:
-  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-      wget https://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh;
-    else
-      wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
-    fi
+  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
   - bash miniconda.sh -b -p $HOME/miniconda
   - export PATH="$HOME/miniconda/bin:$PATH"
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
   - conda info -a
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy theano pytest
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib pytest h5py theano
   - source activate test-environment
   - pip install git+https://github.com/berleon/seya.git@ce0401f273199fd8f68533d1c9abb6df88edfbc6#egg=seya
   - pip install .
 script:
   - py.test
-
+notifications:
+  slack:
+    secure: NxD9/+HC18xETTcbPslFfMN7zud09KsgibEts/BxZGfp7at5y0TRHIQ+n/+AH/YrFhwPT1NIVM2pNDGMCf9Bpgqa0hbLJhOk2RC0LOohnX7vqY7UjDwQtpSAxkphIbYFnM6vK1wZekCmoO6ioWpkovbyx4+E6Ys5tyhmjg0yn2fr7CG1g1cP/Q6X3iyJDNz4cmTUPbstFvkEbBBC1VQo1O3B7oLAUzyFFAI0Xtjo8+WYwMUCZANTWyAuYQeFeyqzf4oXkYvLs/CxFhNejFtOcu3b3n1hzNWkDffGBKxdpdEKjVY+t6XFI8AKdeYsqx/3xlCyBCE9trptI2ElXsyLmzdfaTZaQKcYKiyqZ4fgqLAWUIYBTX3fgde1vNL5/WvyZNz6cFbMUrDbrsCou11TT5nvw6+spRBfIpGb/DkPyn+g+A8+7Blnk2Qe+QhohMWS866fMvkoue+dN0AN0bqgrqX73IApIv9qWCKEVk8PNhZYygBDyXMol5AR28qAuqxstcM5A1wCz2jtnMPt3WObzXeIXAZyEV8kbZR2QW1fmc8qXx7OTxIqlKjp5V/taSqyFhGfxQqzVRg6781QR7thFPK5t/msPkILGZCs9h+GRIy8p3JGegRCQ1nqElrV7NHLRHaG4MAoLHxf2PsvJhwz5zawpJqijoaacRn7Q3XHDm0=
