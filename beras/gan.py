@@ -21,9 +21,80 @@ from keras.models import Sequential, Model, standardize_X, standardize_weights, 
 import keras.callbacks as cbks
 from keras import optimizers
 import numpy as np
+from beras.models import AbstractModel
 
 
-class GenerativeAdverserial(Model):
+class GANTrainer(cbks.Callback):
+    def __init__(self, X, z_shape, d_train, g_train, d_evaluate, g_evaluate):
+        super().__init__()
+        self.next_evalutation = 0
+        self.d_train = d_train
+        self.g_train = g_train
+        self.g_evaluate = g_evaluate
+        self.d_evaluate = d_evaluate
+        self.X = X
+        self.z_shape = z_shape
+        self.evaluate_labels = ['eval_d_real', 'eval_d_gen', 'eval_g_loss']
+        self.D_out_labels = ['d_loss', 'd_real', 'd_gen']
+        self.G_out_labels = ['g_loss']
+        self.g_optimize = True
+        self.d_optimize = True
+
+    def metrics(self):
+        return self.evaluate_labels + self.D_out_labels + self.G_out_labels
+
+    def on_epoch_begin(self, epoch, logs={}):
+        self.ZD = standardize_X(np.random.sample(self.z_shape))
+        self.ZG = standardize_X(np.random.sample(self.z_shape))
+        self.g_ins = self.ZG
+        self.d_ins = standardize_X(self.X) + self.ZD
+        self.next_evalutation = 0
+
+    def _evaluate(self, d_ins, g_ins, batch_logs):
+        batch_index = batch_logs['batch']
+        loss_margin = 0.3
+        d_losses = self.d_evaluate(*d_ins)
+        d_loss_total = d_losses[0]
+        d_loss_on_gen = d_losses[2]
+        batch_logs['eval_d_real'] = d_losses[1]
+        batch_logs['eval_d_gen'] = d_loss_on_gen
+        g_loss = self.g_evaluate(*g_ins)[0]
+        batch_logs['eval_g_loss'] = g_loss
+        skip_evaluation = 0
+        if g_loss > d_loss_on_gen + loss_margin:
+            self.g_optimize = True
+            self.d_optimize = False
+            skip_evaluation = 4
+        elif d_loss_on_gen + loss_margin > g_loss > d_loss_on_gen:
+            self.g_optimize = True
+            self.d_optimize = True
+        elif d_loss_on_gen > g_loss:
+            self.g_optimize = True
+            self.d_optimize = True
+        if d_loss_total > 0.7:
+            self.d_optimize = True
+            skip_evaluation = 0
+        self.next_evalutation = batch_index + skip_evaluation + 1
+
+    def train(self, model, batch_ids, batch_index, batch_logs=None):
+        if batch_logs is None:
+            batch_logs = {}
+
+        d_ins_batch = slice_X(self.d_ins, batch_ids)
+        g_ins_batch = slice_X(self.g_ins, batch_ids)
+        if batch_index == self.next_evalutation:
+            self._evaluate(d_ins_batch, g_ins_batch, batch_logs)
+        if self.d_optimize:
+            outs_D = self.d_train(*d_ins_batch)
+            for l, o in zip(self.D_out_labels, outs_D):
+                batch_logs[l] = o
+        if self.g_optimize:
+            outs_G = self.g_train(*g_ins_batch)
+            for l, o in zip(self.G_out_labels, outs_G):
+                batch_logs[l] = o
+
+
+class GenerativeAdverserial(AbstractModel):
     def __init__(self, generator: Sequential, detector: Sequential):
         super().__init__()
         self.G = generator
@@ -47,133 +118,41 @@ class GenerativeAdverserial(Model):
         d_loss_gen = bce(d_out_given_g, T.zeros_like(d_out_given_g)).mean()
 
         loss_train_D = d_loss_real + d_loss_gen
-        updates_D = self.optimizer.get_updates(
+        d_updates = self.optimizer.get_updates(
             self.D.params, self.D.constraints, loss_train_D)
-        self._train_D = theano.function(
-            [x_train, z_train], [loss_train_D, d_loss_real, d_loss_gen], updates=updates_D,
+        self._d_train = theano.function(
+            [x_train, z_train], [loss_train_D, d_loss_real, d_loss_gen], updates=d_updates,
             allow_input_downcast=True, mode=mode)
-        self._evaluate_D = theano.function(
+        self._d_evaluate = theano.function(
             [x_train, z_train], [loss_train_D, d_loss_real, d_loss_gen],
             allow_input_downcast=True, mode=mode)
-        loss_train_G = bce(d_out_given_g, T.ones_like(d_out_given_g)).mean()
-        updates_G = self.optimizer.get_updates(
-            self.G.params, self.G.constraints, loss_train_G)
-        self._evaluate_G = theano.function([z_train], [loss_train_G],
+        g_loss = bce(d_out_given_g, T.ones_like(d_out_given_g)).mean()
+        g_updates = self.optimizer.get_updates(
+            self.G.params, self.G.constraints, g_loss)
+        self._g_evaluate = theano.function([z_train], [g_loss],
                                            allow_input_downcast=True, mode=mode)
-        self._train_G = theano.function([z_train], [loss_train_G], updates=updates_G,
+        self._g_train = theano.function([z_train], [g_loss], updates=g_updates,
                                         allow_input_downcast=True, mode=mode)
         self._generate = theano.function(
             [self.G.get_input(train=True)], [self.G.get_output(train=True)],
             allow_input_downcast=True, mode=mode)
 
     def print_svg(self):
-        theano.printing.pydotprint(self._train_G, outfile="train_g.png")
-        theano.printing.pydotprint(self._train_D, outfile="train_d.png")
-        theano.printing.pydotprint(self._evaluate_D, outfile="evaluate_d.png")
-        theano.printing.pydotprint(self._evaluate_G, outfile="evaluate_g.png")
+        theano.printing.pydotprint(self._g_train, outfile="train_g.png")
+        theano.printing.pydotprint(self._d_train, outfile="train_d.png")
+        theano.printing.pydotprint(self._d_evaluate, outfile="evaluate_d.png")
+        theano.printing.pydotprint(self._g_evaluate, outfile="evaluate_g.png")
 
-    def fit(self, X, z_shape=None, batch_size=128, nb_epoch=100,
-            verbose=0, callbacks=None,  shuffle=True, show_generator_accuracy=False):
+    def fit(self, X, z_shape, batch_size=128, nb_epoch=100, verbose=0,
+            callbacks=None,  shuffle=True):
+        trainer = GANTrainer(X, z_shape,
+                             d_train=self._d_train, d_evaluate=self._d_evaluate,
+                             g_train=self._g_train, g_evaluate=self._g_evaluate)
         if callbacks is None:
             callbacks = []
-
-        X = standardize_X(X)
-        ZD = standardize_X(np.random.sample(z_shape))
-        ZG = standardize_X(np.random.sample(z_shape))
-        evaluate_labels = ['err_D_on_x', 'err_D_on_gen', 'err_G']
-        D_out_labels = ['D_loss', 'D_real', 'D_gen']
-        G_out_labels = ['G_loss']
-        ins_D = X + ZD
-        ins_G = ZG
-        train_D = True
-        train_G = True
-        loss_margin = 0.2
-        nb_train_sample = X[0].shape[0]
-        index_array = np.arange(nb_train_sample)
-        metrics = D_out_labels + G_out_labels + evaluate_labels
-        history = cbks.History()
-        if verbose:
-            callbacks = [history, cbks.BaseLogger()] + callbacks
-        else:
-            callbacks = [history] + callbacks
-        callbacks = cbks.CallbackList(callbacks)
-
-        callbacks._set_model(self)
-        callbacks._set_params({
-            'batch_size': batch_size,
-            'nb_epoch': nb_epoch,
-            'nb_sample': nb_train_sample,
-            'verbose': verbose,
-            'do_validation': False,
-            'metrics': metrics,
-        })
-        callbacks.on_train_begin()
-
-        self.stop_training = False
-        for epoch in range(nb_epoch):
-            ZD[0] = np.random.normal(0, 0.8, z_shape)
-            ZG[0] = np.random.normal(0, 0.8, z_shape)
-            callbacks.on_epoch_begin(epoch)
-            if shuffle == 'batch':
-                index_array = batch_shuffle(index_array, batch_size)
-            elif shuffle:
-                np.random.shuffle(index_array)
-
-            next_evaluate_index = 0
-            batches = make_batches(nb_train_sample, batch_size)
-            for batch_index, (batch_start, batch_end) in enumerate(batches):
-                batch_ids = index_array[batch_start:batch_end]
-                try:
-                    ins_D_batch = slice_X(ins_D, batch_ids)
-                    ins_G_batch = slice_X(ins_G, batch_ids)
-                except TypeError as err:
-                    print('TypeError while preparing batch. \
-                        If using HDF5 input data, pass shuffle="batch".\n')
-                    raise
-                skip_evaluation = 0
-                batch_logs = {}
-                if batch_index == next_evaluate_index:
-                    err_D = self._evaluate_D(*ins_D_batch)
-                    err_D_on_gen = err_D[2]
-                    batch_logs['err_D_on_x'] = err_D[1]
-                    batch_logs['err_D_on_gen'] = err_D_on_gen
-                    err_G = self._evaluate_G(*ins_G_batch)[0]
-                    batch_logs['err_G'] = err_G
-                    if err_G > err_D_on_gen + loss_margin:
-                        train_G = True
-                        train_D = False
-                        skip_evaluation = 4
-                    elif err_D_on_gen + loss_margin > err_G > err_D_on_gen:
-                        train_G = True
-                        train_D = True
-                    elif err_D_on_gen > err_G:
-                        train_G = True
-                        train_D = True
-                    if err_D_on_gen > 1.2:
-                        train_D = True
-                        skip_evaluation = 0
-                    next_evaluate_index = batch_index + skip_evaluation + 1
-
-                batch_logs['batch'] = batch_index
-                batch_logs['size'] = len(batch_ids)
-                callbacks.on_batch_begin(batch_index, batch_logs)
-                if train_D:
-                    outs_D = self._train_D(*ins_D_batch)
-                    for l, o in zip(D_out_labels, outs_D):
-                        batch_logs[l] = o
-                if train_G:
-                    outs_G = self._train_G(*ins_G_batch)
-                    for l, o in zip(G_out_labels, outs_G):
-                        batch_logs[l] = o
-                callbacks.on_batch_end(batch_index, batch_logs)
-
-
-            callbacks.on_epoch_end(epoch)
-            if self.stop_training:
-                break
-
-        callbacks.on_train_end()
-        return history
+        callbacks.append(trainer)
+        self._fit(trainer.train, len(X), batch_size=batch_size, nb_epoch=nb_epoch,
+                  verbose=verbose, callbacks=callbacks, shuffle=shuffle, metrics=trainer.metrics())
 
     def load_weights(self, fname):
         self.G.load_weights(fname.format("generator"))
@@ -188,7 +167,7 @@ class GenerativeAdverserial(Model):
 
     def train_batch(self, X, ZD, ZG, k=1):
         for i in range(k):
-            self._train_D([X, ZD])
-        self._train_D([ZG])
+            self._d_train([X, ZD])
+        self._d_train([ZG])
 
 

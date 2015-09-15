@@ -47,7 +47,7 @@ class AbstractModel(object):
             val_outs = [val_outs]
         return val_outs
 
-    def _fit(self, ins, f, out_labels=[], batch_size=128, nb_epoch=100, verbose=1, callbacks=[],
+    def _fit(self, f, nb_train_sample, batch_size=128, nb_epoch=100, verbose=1, callbacks=[],
              val_ins=None, shuffle=True, metrics=[], val_fn=None):
         '''
             Abstract fit function for f(*ins). Assume that f returns a list, labelled by out_labels.
@@ -56,9 +56,8 @@ class AbstractModel(object):
         if val_fn and val_ins:
             do_validation = True
             if verbose:
-                print("Train on %d samples, validate on %d samples" % (len(ins[0]), len(val_ins[0])))
+                print("Train on %d samples, validate on %d samples" % (nb_train_sample, len(val_ins[0])))
 
-        nb_train_sample = len(ins[0])
         index_array = np.arange(nb_train_sample)
 
         history = cbks.History()
@@ -90,22 +89,12 @@ class AbstractModel(object):
             batches = make_batches(nb_train_sample, batch_size)
             for batch_index, (batch_start, batch_end) in enumerate(batches):
                 batch_ids = index_array[batch_start:batch_end]
-                try:
-                    ins_batch = slice_X(ins, batch_ids)
-                except TypeError as err:
-                    print('TypeError while preparing batch. \
-                        If using HDF5 input data, pass shuffle="batch".\n')
-                    raise
-
                 batch_logs = {}
                 batch_logs['batch'] = batch_index
                 batch_logs['size'] = len(batch_ids)
                 callbacks.on_batch_begin(batch_index, batch_logs)
 
-                outs = f(self, ins_batch, batch_logs)
-                for l, o in zip(out_labels, outs):
-                    batch_logs[l] = o
-
+                f(self, batch_ids, batch_index, batch_logs)
                 callbacks.on_batch_end(batch_index, batch_logs)
 
                 epoch_logs = {}
