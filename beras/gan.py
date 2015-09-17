@@ -71,7 +71,7 @@ class GANTrainer(cbks.Callback):
         elif d_loss_on_gen > g_loss:
             self.g_optimize = True
             self.d_optimize = True
-        if d_loss_total > 0.7:
+        if d_loss_total > 1.0 and g_loss < 5:
             self.d_optimize = True
             skip_evaluation = 0
         self.next_evalutation = batch_index + skip_evaluation + 1
