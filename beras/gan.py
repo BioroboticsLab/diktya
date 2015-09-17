@@ -48,33 +48,27 @@ class GANTrainer(cbks.Callback):
         self.ZG = standardize_X(np.random.sample(self.z_shape))
         self.g_ins = self.ZG
         self.d_ins = standardize_X(self.X) + self.ZD
-        self.next_evalutation = 0
 
     def _evaluate(self, d_ins, g_ins, batch_logs):
-        batch_index = batch_logs['batch']
         loss_margin = 0.3
         d_losses = self.d_evaluate(*d_ins)
-        d_loss_total = d_losses[0]
-        d_loss_on_gen = d_losses[2]
+        d_loss_real = d_losses[0]
+        d_loss_gen = d_losses[2]
         batch_logs['eval_d_real'] = d_losses[1]
-        batch_logs['eval_d_gen'] = d_loss_on_gen
+        batch_logs['eval_d_gen'] = d_loss_gen
         g_loss = self.g_evaluate(*g_ins)[0]
         batch_logs['eval_g_loss'] = g_loss
-        skip_evaluation = 0
-        if g_loss > d_loss_on_gen + loss_margin:
+        if d_loss_gen > d_loss_real + loss_margin:
+            self.g_optimize = False
+            self.d_optimize = True
+        elif d_loss_real + loss_margin >= d_loss_gen > d_loss_real:
             self.g_optimize = True
             self.d_optimize = False
-            skip_evaluation = 4
-        elif d_loss_on_gen + loss_margin > g_loss > d_loss_on_gen:
+        elif d_loss_gen <= d_loss_real:
             self.g_optimize = True
             self.d_optimize = True
-        elif d_loss_on_gen > g_loss:
-            self.g_optimize = True
+        if d_loss_real > 0.7:
             self.d_optimize = True
-        if d_loss_total > 1.0 and g_loss < 5:
-            self.d_optimize = True
-            skip_evaluation = 0
-        self.next_evalutation = batch_index + skip_evaluation + 1
 
     def train(self, model, batch_ids, batch_index, batch_logs=None):
         if batch_logs is None:
@@ -82,8 +76,7 @@ class GANTrainer(cbks.Callback):
 
         d_ins_batch = slice_X(self.d_ins, batch_ids)
         g_ins_batch = slice_X(self.g_ins, batch_ids)
-        if batch_index == self.next_evalutation:
-            self._evaluate(d_ins_batch, g_ins_batch, batch_logs)
+        self._evaluate(d_ins_batch, g_ins_batch, batch_logs)
         if self.d_optimize:
             outs_D = self.d_train(*d_ins_batch)
             for l, o in zip(self.D_out_labels, outs_D):
