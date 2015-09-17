@@ -13,13 +13,17 @@
 # limitations under the License.
 import os
 import keras
+from keras.callbacks import Callback
 import numpy as np
 from scipy.misc import imsave
 
 
-class LossPrinter(keras.callbacks.Callback):
+class LossPrinter(Callback):
+    def on_epoch_begin(self, epoch, logs={}):
+        self.epoch = epoch
+
     def on_batch_end(self, batch, logs={}):
-        print("#{} ".format(batch), end='')
+        print("#{}-{} ".format(self.epoch, batch), end='')
         for k in self.params['metrics']:
             if k in logs:
                 print(" {}: {:.4f}".format(k, float(logs[k])), end='')
