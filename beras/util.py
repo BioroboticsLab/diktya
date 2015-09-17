@@ -31,12 +31,15 @@ class LossPrinter(Callback):
 
 
 class Sample(keras.callbacks.Callback):
-    def __init__(self, outdir, z_shape):
+    def __init__(self, outdir, z_shape, every_nth_epoch=10):
         super().__init__()
         self.outdir = outdir
         self.z_shape = z_shape
+        self.every_nth_epoch = every_nth_epoch
 
     def on_epoch_begin(self, epoch, logs={}):
+        if epoch % self.every_nth_epoch != 0:
+            return
         nb_samples = self.z_shape[0]
         mnist_sample = self.model.generate(
             np.random.uniform(-1, 1, self.z_shape))
