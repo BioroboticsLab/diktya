@@ -49,5 +49,6 @@ class Sample(keras.callbacks.Callback):
         os.makedirs(out_dir, exist_ok=True)
         for i in range(nb_samples):
             outpath = os.path.join(out_dir, str(i) + ".png")
+
             imsave(outpath,
-                   (mnist_sample[i].reshape(28, 28)*255).astype(np.uint8))
+                   (mnist_sample[i]*255).reshape(3, 16, 16).astype(np.uint8))

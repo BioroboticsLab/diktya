@@ -56,8 +56,6 @@ class GANTrainer(cbks.Callback):
         d_loss_gen = d_losses[2]
         batch_logs['eval_d_real'] = d_losses[1]
         batch_logs['eval_d_gen'] = d_loss_gen
-        g_loss = self.g_evaluate(*g_ins)[0]
-        batch_logs['eval_g_loss'] = g_loss
         if d_loss_gen > d_loss_real + loss_margin:
             self.g_optimize = False
             self.d_optimize = True
@@ -66,7 +64,7 @@ class GANTrainer(cbks.Callback):
             self.d_optimize = False
         elif d_loss_gen <= d_loss_real:
             self.g_optimize = True
-            self.d_optimize = True
+            self.d_optimize = False
         if d_loss_real > 0.7:
             self.d_optimize = True
 
@@ -93,8 +91,9 @@ class GenerativeAdverserial(AbstractModel):
         self.G = generator
         self.D = detector
 
-    def compile(self, optimizer, mode=None):
-        self.optimizer = optimizers.get(optimizer)
+    def compile(self, optimizer_g, optimizer_d, mode=None):
+        self.optimizer_g = optimizers.get(optimizer_g)
+        self.optimizer_d = optimizers.get(optimizer_d)
 
         # reset D's input to X
         ndim = self.D.layers[0].input.ndim
@@ -111,7 +110,7 @@ class GenerativeAdverserial(AbstractModel):
         d_loss_gen = bce(d_out_given_g, T.zeros_like(d_out_given_g)).mean()
 
         loss_train_D = d_loss_real + d_loss_gen
-        d_updates = self.optimizer.get_updates(
+        d_updates = self.optimizer_d.get_updates(
             self.D.params, self.D.constraints, loss_train_D)
         self._d_train = theano.function(
             [x_train, z_train], [loss_train_D, d_loss_real, d_loss_gen], updates=d_updates,
@@ -120,7 +119,7 @@ class GenerativeAdverserial(AbstractModel):
             [x_train, z_train], [loss_train_D, d_loss_real, d_loss_gen],
             allow_input_downcast=True, mode=mode)
         g_loss = bce(d_out_given_g, T.ones_like(d_out_given_g)).mean()
-        g_updates = self.optimizer.get_updates(
+        g_updates = self.optimizer_g.get_updates(
             self.G.params, self.G.constraints, g_loss)
         self._g_evaluate = theano.function([z_train], [g_loss],
                                            allow_input_downcast=True, mode=mode)
