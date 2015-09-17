@@ -44,8 +44,8 @@ class GANTrainer(cbks.Callback):
         return self.evaluate_labels + self.D_out_labels + self.G_out_labels
 
     def on_epoch_begin(self, epoch, logs={}):
-        self.ZD = standardize_X(np.random.sample(self.z_shape))
-        self.ZG = standardize_X(np.random.sample(self.z_shape))
+        self.ZD = standardize_X(np.random.uniform(-1, 1, self.z_shape))
+        self.ZG = standardize_X(np.random.uniform(-1, 1, self.z_shape))
         self.g_ins = self.ZG
         self.d_ins = standardize_X(self.X) + self.ZD
 
