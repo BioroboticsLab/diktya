@@ -25,23 +25,17 @@ from beras.models import AbstractModel
 
 
 class GANTrainer(cbks.Callback):
-    def __init__(self, X, z_shape, d_train, g_train, d_evaluate, g_evaluate):
+    def __init__(self, X, z_shape, d_train, g_train):
         super().__init__()
-        self.next_evalutation = 0
         self.d_train = d_train
         self.g_train = g_train
-        self.g_evaluate = g_evaluate
-        self.d_evaluate = d_evaluate
         self.X = X
         self.z_shape = z_shape
-        self.evaluate_labels = ['eval_d_real', 'eval_d_gen', 'eval_g_loss']
         self.D_out_labels = ['d_loss', 'd_real', 'd_gen']
         self.G_out_labels = ['g_loss']
-        self.g_optimize = True
-        self.d_optimize = True
 
     def metrics(self):
-        return self.evaluate_labels + self.D_out_labels + self.G_out_labels
+        return self.D_out_labels + self.G_out_labels
 
     def on_epoch_begin(self, epoch, logs={}):
         self.ZD = standardize_X(np.random.uniform(-1, 1, self.z_shape))
@@ -49,40 +43,18 @@ class GANTrainer(cbks.Callback):
         self.g_ins = self.ZG
         self.d_ins = standardize_X(self.X) + self.ZD
 
-    def _evaluate(self, d_ins, g_ins, batch_logs):
-        loss_margin = 0.3
-        d_losses = self.d_evaluate(*d_ins)
-        d_loss_real = d_losses[0]
-        d_loss_gen = d_losses[2]
-        batch_logs['eval_d_real'] = d_losses[1]
-        batch_logs['eval_d_gen'] = d_loss_gen
-        if d_loss_gen > d_loss_real + loss_margin:
-            self.g_optimize = False
-            self.d_optimize = True
-        elif d_loss_real + loss_margin >= d_loss_gen > d_loss_real:
-            self.g_optimize = True
-            self.d_optimize = False
-        elif d_loss_gen <= d_loss_real:
-            self.g_optimize = True
-            self.d_optimize = False
-        if d_loss_real > 0.7:
-            self.d_optimize = True
-
     def train(self, model, batch_ids, batch_index, batch_logs=None):
         if batch_logs is None:
             batch_logs = {}
 
         d_ins_batch = slice_X(self.d_ins, batch_ids)
         g_ins_batch = slice_X(self.g_ins, batch_ids)
-        self._evaluate(d_ins_batch, g_ins_batch, batch_logs)
-        if self.d_optimize:
-            outs_D = self.d_train(*d_ins_batch)
-            for l, o in zip(self.D_out_labels, outs_D):
-                batch_logs[l] = o
-        if self.g_optimize:
-            outs_G = self.g_train(*g_ins_batch)
-            for l, o in zip(self.G_out_labels, outs_G):
-                batch_logs[l] = o
+        outs_D = self.d_train(*d_ins_batch)
+        for l, o in zip(self.D_out_labels, outs_D):
+            batch_logs[l] = o
+        outs_G = self.g_train(*g_ins_batch)
+        for l, o in zip(self.G_out_labels, outs_G):
+            batch_logs[l] = o
 
 
 class GenerativeAdverserial(AbstractModel):
@@ -91,9 +63,9 @@ class GenerativeAdverserial(AbstractModel):
         self.G = generator
         self.D = detector
 
-    def compile(self, optimizer_g, optimizer_d, mode=None):
-        self.optimizer_g = optimizers.get(optimizer_g)
-        self.optimizer_d = optimizers.get(optimizer_d)
+    def compile(self, optimizer, mode=None):
+        self.optimizer_g = optimizers.get(optimizer)
+        self.optimizer_d = optimizers.get(optimizer)
 
         # reset D's input to X
         ndim = self.D.layers[0].input.ndim
@@ -115,14 +87,9 @@ class GenerativeAdverserial(AbstractModel):
         self._d_train = theano.function(
             [x_train, z_train], [loss_train_D, d_loss_real, d_loss_gen], updates=d_updates,
             allow_input_downcast=True, mode=mode)
-        self._d_evaluate = theano.function(
-            [x_train, z_train], [loss_train_D, d_loss_real, d_loss_gen],
-            allow_input_downcast=True, mode=mode)
         g_loss = bce(d_out_given_g, T.ones_like(d_out_given_g)).mean()
         g_updates = self.optimizer_g.get_updates(
             self.G.params, self.G.constraints, g_loss)
-        self._g_evaluate = theano.function([z_train], [g_loss],
-                                           allow_input_downcast=True, mode=mode)
         self._g_train = theano.function([z_train], [g_loss], updates=g_updates,
                                         allow_input_downcast=True, mode=mode)
         self._generate = theano.function(
@@ -132,14 +99,11 @@ class GenerativeAdverserial(AbstractModel):
     def print_svg(self):
         theano.printing.pydotprint(self._g_train, outfile="train_g.png")
         theano.printing.pydotprint(self._d_train, outfile="train_d.png")
-        theano.printing.pydotprint(self._d_evaluate, outfile="evaluate_d.png")
-        theano.printing.pydotprint(self._g_evaluate, outfile="evaluate_g.png")
 
     def fit(self, X, z_shape, batch_size=128, nb_epoch=100, verbose=0,
             callbacks=None,  shuffle=True):
         trainer = GANTrainer(X, z_shape,
-                             d_train=self._d_train, d_evaluate=self._d_evaluate,
-                             g_train=self._g_train, g_evaluate=self._g_evaluate)
+                             d_train=self._d_train, g_train=self._g_train)
         if callbacks is None:
             callbacks = []
         callbacks.append(trainer)
