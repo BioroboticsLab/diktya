@@ -14,101 +14,105 @@
 from keras.utils.theano_utils import ndim_tensor
 
 import theano
+import theano.tensor.shared_randomstreams as T_random
 import theano.tensor as T
 from theano.tensor.nnet import binary_crossentropy as bce
-from keras.models import Sequential, Model, standardize_X, standardize_weights, \
-    batch_shuffle, make_batches, slice_X, weighted_objective
-import keras.callbacks as cbks
+from keras.models import Sequential
 from keras import optimizers
+from keras.layers.convolutional import UpSample2D, Convolution2D
 import numpy as np
 from beras.models import AbstractModel
 
 
-class GANTrainer(cbks.Callback):
-    def __init__(self, X, z_shape, d_train, g_train):
-        super().__init__()
-        self.d_train = d_train
-        self.g_train = g_train
-        self.X = X
-        self.z_shape = z_shape
-        self.D_out_labels = ['d_loss', 'd_real', 'd_gen']
-        self.G_out_labels = ['g_loss']
-
-    def metrics(self):
-        return self.D_out_labels + self.G_out_labels
-
-    def on_epoch_begin(self, epoch, logs={}):
-        self.ZD = standardize_X(np.random.uniform(-1, 1, self.z_shape))
-        self.ZG = standardize_X(np.random.uniform(-1, 1, self.z_shape))
-        self.g_ins = self.ZG
-        self.d_ins = standardize_X(self.X) + self.ZD
-
-    def train(self, model, batch_ids, batch_index, batch_logs=None):
-        if batch_logs is None:
-            batch_logs = {}
-
-        d_ins_batch = slice_X(self.d_ins, batch_ids)
-        g_ins_batch = slice_X(self.g_ins, batch_ids)
-        outs_D = self.d_train(*d_ins_batch)
-        for l, o in zip(self.D_out_labels, outs_D):
-            batch_logs[l] = o
-        outs_G = self.g_train(*g_ins_batch)
-        for l, o in zip(self.G_out_labels, outs_G):
-            batch_logs[l] = o
 
 
-class GenerativeAdverserial(AbstractModel):
-    def __init__(self, generator: Sequential, detector: Sequential):
-        super().__init__()
+_upsample_layer = UpSample2D()
+
+
+def upsample(input):
+    _upsample_layer.input = input
+    return _upsample_layer.get_output(train=False)
+
+
+_downsample_layer = Convolution2D(1, 1, 2, 2, subsample=(2, 2))
+
+
+def downsample(input):
+    _downsample_layer.input = input
+    return _downsample_layer.get_output(train=False)
+
+
+class GAN(AbstractModel):
+    def __init__(self, generator: Sequential, discremenator: Sequential,
+                 z_shape, num_gen_conditional=0, both_conditional=0):
         self.G = generator
-        self.D = detector
+        self.D = discremenator
+        self.num_gen_conditional = num_gen_conditional
+        self.num_both_conditional = both_conditional
+        self.rs = T_random.RandomStreams(1334)
+        self.z_shape = z_shape
 
     def compile(self, optimizer, mode=None):
         self.optimizer_g = optimizers.get(optimizer)
         self.optimizer_d = optimizers.get(optimizer)
 
+        z = self.rs.uniform(self.z_shape, -1, 1)
+        gen_conditional = [T.tensor4("gen_conditional_{}".format(i))
+                           for i in range(self.num_gen_conditional)]
+        both_conditional = [T.tensor4("conditional_{}".format(i))
+                          for i in range(self.num_both_conditional)]
+        g_input = T.concatenate([z] + gen_conditional + both_conditional, axis=1)
+        self.G.layers[0].input = g_input
+        self.g_out = self.G.get_output(train=True)
         # reset D's input to X
-        ndim = self.D.layers[0].input.ndim
-        self.D.layers[0].input = ndim_tensor(ndim)
-        x_train = self.D.get_input(train=True)
-        d_out_given_x = self.D.get_output(train=True)
-
-        # set D's input to G's output
-        self.D.layers[0].input = self.G.get_output(train=True)
-        d_out_given_g = self.D.get_output(train=True)
-        z_train = self.G.get_input(train=False)
-
+        x_real = ndim_tensor(len(self.z_shape))
+        d_in = T.concatenate([self.g_out, x_real])
+        if both_conditional:
+            d_in = T.concatenate([d_in, both_conditional], axis=1)
+        self.D.layers[0].input = d_in
+        self.d_out = self.D.get_output(train=True)
+        batch_size = self.d_out.shape[0]
+        d_out_given_g = self.d_out[:batch_size//2]
+        d_out_given_x = self.d_out[batch_size//2:]
         d_loss_real = bce(d_out_given_x, T.ones_like(d_out_given_x)).mean()
         d_loss_gen = bce(d_out_given_g, T.zeros_like(d_out_given_g)).mean()
-
-        loss_train_D = d_loss_real + d_loss_gen
+        d_loss = d_loss_real + d_loss_gen
         d_updates = self.optimizer_d.get_updates(
-            self.D.params, self.D.constraints, loss_train_D)
-        self._d_train = theano.function(
-            [x_train, z_train], [loss_train_D, d_loss_real, d_loss_gen], updates=d_updates,
-            allow_input_downcast=True, mode=mode)
+            self.D.params, self.D.constraints, d_loss)
+
         g_loss = bce(d_out_given_g, T.ones_like(d_out_given_g)).mean()
         g_updates = self.optimizer_g.get_updates(
             self.G.params, self.G.constraints, g_loss)
-        self._g_train = theano.function([z_train], [g_loss], updates=g_updates,
-                                        allow_input_downcast=True, mode=mode)
-        self._generate = theano.function(
-            [self.G.get_input(train=True)], [self.G.get_output(train=True)],
+        self._train = theano.function([x_real] + gen_conditional + both_conditional,
+            [d_loss, d_loss_real, d_loss_gen, g_loss], updates=d_updates + g_updates,
             allow_input_downcast=True, mode=mode)
+        self._generate = theano.function(gen_conditional + both_conditional,
+                                         [self.g_out], allow_input_downcast=True, mode=mode)
+
+    def fit(self, X, batch_size=128, nb_epoch=100, verbose=0,
+            callbacks=None,  shuffle=True):
+        if callbacks is None:
+            callbacks = []
+        labels = ['d_loss', 'd_real', 'd_gen', 'g_loss']
+
+        def train(model, batch_ids, batch_index, batch_logs=None):
+            if batch_logs is None:
+                batch_logs = {}
+            outs = self._train(X[batch_ids])
+            for key, value in zip(labels, outs):
+                batch_logs[key] = value
+
+        assert batch_size % 2 == 0, "batch_size must be multiple of two."
+        self._fit(train, len(X), batch_size=batch_size, nb_epoch=nb_epoch,
+                  verbose=verbose, callbacks=callbacks, shuffle=shuffle, metrics=labels)
+        # in the original paper D gets the upsamples real coarse image.
+        # We have a faked coarse and a real coarse image.
+        # To prevent D from making his decision on the faked coarse image, we
+        # do not feed D the coarse images.
 
     def print_svg(self):
         theano.printing.pydotprint(self._g_train, outfile="train_g.png")
         theano.printing.pydotprint(self._d_train, outfile="train_d.png")
-
-    def fit(self, X, z_shape, batch_size=128, nb_epoch=100, verbose=0,
-            callbacks=None,  shuffle=True):
-        trainer = GANTrainer(X, z_shape,
-                             d_train=self._d_train, g_train=self._g_train)
-        if callbacks is None:
-            callbacks = []
-        callbacks.append(trainer)
-        self._fit(trainer.train, len(X), batch_size=batch_size, nb_epoch=nb_epoch,
-                  verbose=verbose, callbacks=callbacks, shuffle=shuffle, metrics=trainer.metrics())
 
     def load_weights(self, fname):
         self.G.load_weights(fname.format("generator"))
@@ -118,12 +122,11 @@ class GenerativeAdverserial(AbstractModel):
         self.G.save_weights(fname.format("generator"), overwrite)
         self.D.save_weights(fname.format("detector"), overwrite)
 
-    def generate(self, Z):
-        return self._generate(Z)[0]
+    def generate(self):
+        return self._generate()[0]
 
     def train_batch(self, X, ZD, ZG, k=1):
         for i in range(k):
             self._d_train([X, ZD])
         self._d_train([ZG])
-
 

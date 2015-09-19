@@ -11,18 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import os
 import keras
 from keras.callbacks import ModelCheckpoint
 import keras.initializations
-from keras.layers.convolutional import Convolution2D
-from keras.layers.core import Dense, Dropout, MaxoutDense
+from keras.layers.convolutional import Convolution2D, UpSample2D, MaxPooling2D
+from keras.layers.core import Dense, Dropout, MaxoutDense, Flatten
 
 from keras.models import Sequential
-from keras.optimizers import SGD, Adam
 import math
-import pytest
-from beras.gan import GenerativeAdverserial, LaplacianGenerativeAdverserial
+from beras.gan import GAN
 import numpy as np
 import matplotlib.pyplot as plt
 from beras.util import LossPrinter
@@ -39,10 +38,9 @@ def sample_circle(nb_samples):
 
 
 class Plotter(keras.callbacks.Callback):
-    def __init__(self, X, Z, outdir):
+    def __init__(self, X, outdir):
         super().__init__()
         self.X = X
-        self.Z = Z
         self.outdir = outdir
         os.makedirs(outdir, exist_ok=True)
 
@@ -54,7 +52,10 @@ class Plotter(keras.callbacks.Callback):
         self._plot("on_end_{}.png".format(epoch))
 
     def _plot(self, outname):
-        Y = self.model.generate(self.Z)
+        ys = []
+        for i in range(32):
+            ys.append(self.model.generate())
+        Y = np.concatenate(ys)
         fig = plt.figure()
         plt.ylim(-1, 1.5)
         plt.xlim(-1, 1.5)
@@ -63,15 +64,20 @@ class Plotter(keras.callbacks.Callback):
         fig.savefig(os.path.join(self.outdir, outname))
         plt.close()
 
+
 def test_gen_learn_simle_distribution():
-    mean = (0.2, 0)
-    cov = [[0.5,  0.1],
-           [0.2,  0.4]]
+    def sample_multivariate(nb_samples):
+        mean = (0.2, 0)
+        cov = [[0.5,  0.1],
+               [0.2,  0.4]]
+        return np.random.multivariate_normal(mean, cov, (nb_samples,))
+
     nb_samples = 60000
-    # X = np.random.multivariate_normal(mean, cov, (nb_samples,))
+    # X = sample_multivariate(nb_samples)
     X = sample_circle(nb_samples)
 
     nb_z = 20
+    batch_size = 128
     generator = Sequential()
     generator.add(Dense(nb_z, nb_z, activation='relu', name='d_dense1'))
     generator.add(Dropout(0.5))
@@ -85,8 +91,25 @@ def test_gen_learn_simle_distribution():
     discriminator.add(MaxoutDense(20, 20, nb_feature=5))
     discriminator.add(Dropout(0.5))
     discriminator.add(Dense(20, 1, activation='sigmoid', name='d_dense3'))
-    gan = GenerativeAdverserial(generator, discriminator)
-    gan.compile('adam')
-    Z = np.random.uniform(-1, 1, (600, nb_z))
-    gan.fit(X, (nb_samples, nb_z), nb_epoch=5, verbose=0,
-            callbacks=[LossPrinter(), Plotter(X, Z, "epoches_plot_adam")])
+    gan = GAN(generator, discriminator, (batch_size//2, nb_z))
+    gan.compile('adam', mode='FAST_RUN')
+    gan.fit(X, nb_epoch=5, verbose=0, batch_size=batch_size,
+            callbacks=[LossPrinter(), Plotter(X, "epoches_plot")])
+
+
+def test_conditional_conv_gan():
+    g1 = Sequential()
+    g1.add(Convolution2D(10, 2, 2, 2, activation='relu', border_mode='same'))
+    g1.add(UpSample2D((2, 2)))
+    g1.add(Convolution2D(1, 10, 2, 2, activation='sigmoid', border_mode='same'))
+
+    d1 = Sequential()
+    d1.add(Convolution2D(5, 1, 2, 2, activation='relu'))
+    d1.add(MaxPooling2D())
+    d1.add(Dropout(0.5))
+    d1.add(Flatten())
+    d1.add(Dense(30, 10, activation='relu'))
+    d1.add(Dropout(0.5))
+    d1.add(Dense(20, 1, activation='sigmoid'))
+    gan = GAN(g1, d1, (1, 1, 8, 8), num_gen_conditional=1)
+    gan.compile('adam', 'FAST_COMPILE')
