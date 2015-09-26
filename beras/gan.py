@@ -17,7 +17,7 @@ import theano
 import theano.tensor.shared_randomstreams as T_random
 import theano.tensor as T
 from theano.tensor.nnet import binary_crossentropy as bce
-from keras.models import Sequential
+from keras.models import Sequential, standardize_X
 from keras import optimizers
 from keras.layers.convolutional import UpSample2D, Convolution2D
 import numpy as np
@@ -30,6 +30,9 @@ _upsample_layer = UpSample2D()
 
 
 def upsample(input):
+    if type(input) == list:
+        assert len(input) == 1
+        input = input[0]
     _upsample_layer.input = input
     return _upsample_layer.get_output(train=False)
 
@@ -38,8 +41,48 @@ _downsample_layer = Convolution2D(1, 1, 2, 2, subsample=(2, 2))
 
 
 def downsample(input):
+    if type(input) == list:
+        assert len(input) == 1
+        input = input[0]
     _downsample_layer.input = input
     return _downsample_layer.get_output(train=False)
+
+_rs = T_random.RandomStreams(1334)
+
+
+def get_generator_output(gen, z_shape, train=True, conditional_inputs=[]):
+    z = _rs.uniform(z_shape, -1, 1)
+    g_input = T.concatenate([z] + conditional_inputs, axis=1)
+    gen.layers[0].input = g_input
+    return gen.get_output(train)
+
+
+def stack_laplacian_gens(generators: list, init_z_shape, init_image=None,
+                         conditional_inputs=None, train=True):
+    """Stacks multiple gan to a laplacian pyramid"""
+    scale_shape_up = lambda shp: (shp[0], shp[1], shp[2]*2, shp[3]*2)
+    assert len(generators) >= 2
+
+    if conditional_inputs is None:
+        conditional_inputs = [[] for i in generators]
+
+    previous_out = []
+    if init_image is not None:
+        previous_out = [init_image]
+    gans_outs = []
+    images = []
+    z_shape = init_z_shape
+    for gen, cond_ins in zip(generators, conditional_inputs):
+        cond_ins = standardize_X(cond_ins)
+        previous_out = standardize_X(previous_out)
+        out = get_generator_output(gen, z_shape, train, previous_out + cond_ins)
+        if previous_out:
+            image = upsample(previous_out) + out
+            images.append(image)
+        gans_outs.append(out)
+        previous_out = out
+        z_shape = scale_shape_up(z_shape)
+    return gans_outs, images
 
 
 class GAN(AbstractModel):
@@ -105,10 +148,6 @@ class GAN(AbstractModel):
         assert batch_size % 2 == 0, "batch_size must be multiple of two."
         self._fit(train, len(X), batch_size=batch_size, nb_epoch=nb_epoch,
                   verbose=verbose, callbacks=callbacks, shuffle=shuffle, metrics=labels)
-        # in the original paper D gets the upsamples real coarse image.
-        # We have a faked coarse and a real coarse image.
-        # To prevent D from making his decision on the faked coarse image, we
-        # do not feed D the coarse images.
 
     def print_svg(self):
         theano.printing.pydotprint(self._g_train, outfile="train_g.png")
