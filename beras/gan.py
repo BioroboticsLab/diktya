@@ -24,8 +24,6 @@ import numpy as np
 from beras.models import AbstractModel
 
 
-
-
 _upsample_layer = UpSample2D()
 
 
@@ -57,7 +55,7 @@ def get_generator_output(gen, z_shape, train=True, conditional_inputs=[]):
     return gen.get_output(train)
 
 
-def stack_laplacian_gens(generators: list, init_z_shape, init_image=None,
+def stack_laplacian_gans(generators: list, init_z_shape, init_image=None,
                          conditional_inputs=None, train=True):
     """Stacks multiple gan to a laplacian pyramid"""
     scale_shape_up = lambda shp: (shp[0], shp[1], shp[2]*2, shp[3]*2)
@@ -74,10 +72,12 @@ def stack_laplacian_gens(generators: list, init_z_shape, init_image=None,
     z_shape = init_z_shape
     for gen, cond_ins in zip(generators, conditional_inputs):
         cond_ins = standardize_X(cond_ins)
+        if previous_out:
+            previous_out = upsample(previous_out)
         previous_out = standardize_X(previous_out)
         out = get_generator_output(gen, z_shape, train, previous_out + cond_ins)
         if previous_out:
-            image = upsample(previous_out) + out
+            image = previous_out[0] + out[0]
             images.append(image)
         gans_outs.append(out)
         previous_out = out
@@ -95,9 +95,9 @@ class GAN(AbstractModel):
         self.rs = T_random.RandomStreams(1334)
         self.z_shape = z_shape
 
-    def compile(self, optimizer, mode=None):
-        self.optimizer_g = optimizers.get(optimizer)
-        self.optimizer_d = optimizers.get(optimizer)
+    def compile(self, optimizer_g, optimizer_d, mode=None):
+        self.optimizer_d = optimizers.get(optimizer_d)
+        self.optimizer_g = optimizers.get(optimizer_g)
 
         z = self.rs.uniform(self.z_shape, -1, 1)
         gen_conditional = [T.tensor4("gen_conditional_{}".format(i))
@@ -130,7 +130,9 @@ class GAN(AbstractModel):
             [d_loss, d_loss_real, d_loss_gen, g_loss], updates=d_updates + g_updates,
             allow_input_downcast=True, mode=mode)
         self._generate = theano.function(gen_conditional + both_conditional,
-                                         [self.g_out], allow_input_downcast=True, mode=mode)
+                                         [self.g_out],
+                                         allow_input_downcast=True,
+                                         mode=mode)
 
     def fit(self, X, batch_size=128, nb_epoch=100, verbose=0,
             callbacks=None,  shuffle=True):
@@ -161,11 +163,16 @@ class GAN(AbstractModel):
         self.G.save_weights(fname.format("generator"), overwrite)
         self.D.save_weights(fname.format("detector"), overwrite)
 
-    def generate(self):
-        return self._generate()[0]
+    def generate(self, *conditional):
+        return self._generate(*conditional)[0]
 
     def train_batch(self, X, ZD, ZG, k=1):
         for i in range(k):
             self._d_train([X, ZD])
         self._d_train([ZG])
 
+
+        # in the original paper D gets the upsamples real coarse image.
+        # We have a faked coarse and a real coarse image.
+        # To prevent D from making his decision on the faked coarse image, we
+        # do not feed D the coarse images.
