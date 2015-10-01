@@ -11,8 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
+import tempfile
 from unittest.mock import Mock, MagicMock
 import math
+from keras.layers.convolutional import Convolution2D
+from keras.models import Sequential
 from seya.data_utils import floatX
 import theano
 
@@ -51,3 +55,25 @@ def test_rotates_images():
     )
 
 
+def get_net():
+    rotnet = Sequential()
+    rotnet.add(Convolution2D(1, 1, 2, 2))
+    rotnet.add(Convolution2D(1, 1, 2, 2))
+
+    net = Sequential()
+    net.add(RotationTransformer(rotnet, return_theta=True))
+    net.add(Convolution2D(1, 1, 2, 2))
+    return net, rotnet
+
+
+def test_save_and_loads_weights():
+    dirname = tempfile.mkdtemp()
+    save_path = os.path.join(dirname, "test_net.hdf5")
+    net_save, rotnet_save = get_net()
+    net_load, rotnet_load = get_net()
+    net_save.save_weights(save_path)
+    net_load.load_weights(save_path)
+    for s, l in zip(net_save.params, net_load.params):
+        assert (s.get_value() == l.get_value()).all()
+    for s, l in zip(rotnet_save.params, rotnet_load.params):
+        assert (s.get_value() == l.get_value()).all()
