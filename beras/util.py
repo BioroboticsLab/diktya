@@ -14,7 +14,7 @@
 import os
 import keras
 from keras.callbacks import Callback
-from keras.layers.convolutional import UpSample2D, Convolution2D
+from keras.layers.convolutional import Convolution2D
 import numpy as np
 import theano
 import theano.tensor as T
@@ -53,27 +53,70 @@ class Sample(keras.callbacks.Callback):
             imsave(outpath,
                    (sample[i]*255).reshape(3, 16, 16).astype(np.uint8))
 
-_upsample_layer = UpSample2D()
+
+_upsample_layer = Convolution2D(1, 1, 5, 5, border_mode='valid')
+_gaussian_blur_kernel = np.asarray([[[
+    [1., 4., 6., 4., 1.],
+    [4., 16., 24., 16., 4.],
+    [6., 24., 36., 24., 6.],
+    [4., 16., 24., 16., 4.],
+    [1., 4., 6., 4., 1.]
+]]])
+_upsample_layer_weight = _gaussian_blur_kernel/64.
+_upsample_layer.W = theano.shared(_upsample_layer_weight)
 
 
 def upsample(input):
     if type(input) == list:
         assert len(input) == 1
         input = input[0]
-    _upsample_layer.input = input
+    shp = input.shape
+    upsampled = T.zeros((shp[0], shp[1], 2*shp[2], 2*shp[3]))
+    upsampled = T.set_subtensor(upsampled[:, :, ::2, ::2], input)
+    upsampled = _add_virtual_border(upsampled)
+    _upsample_layer.input = upsampled
     return _upsample_layer.get_output(train=False)
 
 
-_downsample_layer = Convolution2D(1, 1, 2, 2, subsample=(2, 2), border_mode='same')
-_downsample_layer.W = theano.shared(np.asarray([[[
-    [0.25, 0.25],
-    [0.25, 0.25]
-]]]))
+def _add_virtual_border(input, filter_size=5):
+    shp = input.shape
+    assert filter_size % 2 == 1, "only works with odd filters"
+    half = (filter_size - 1) // 2
+    wb = T.zeros((shp[0], shp[1], shp[2]+2*half, shp[3]+2*half))
+    wb = T.set_subtensor(wb[:, :, half:shp[2]+half, half:shp[3]+half], input)
+
+    top = input[:, :, :half, :]
+    wb = T.set_subtensor(wb[:, :, :half, half:shp[3]+half], top[:, :, ::-1, :])
+
+    bottom = input[:, :, -half:, :]
+    wb = T.set_subtensor(wb[:, :, -half:, half:shp[3]+half], bottom[:, :, ::-1, :])
+
+    left = input[:, :, :, :half]
+    wb = T.set_subtensor(wb[:, :, half:shp[2]+half, :half], left[:, :, :, ::-1])
+
+    right = input[:, :, :, -half:]
+    wb = T.set_subtensor(wb[:, :, half:shp[2]+half, -half:], right[:, :, :, ::-1])
+
+    left_top = input[:, :, :half, :half]
+    wb = T.set_subtensor(wb[:, :, :half, :half], left_top[:, :, ::-1, ::-1])
+    left_bottom = input[:, :, -half:, :half]
+    wb = T.set_subtensor(wb[:, :, -half:, :half], left_bottom[:, :, ::-1, ::-1])
+    right_bottom = input[:, :, :half, -half:]
+    wb = T.set_subtensor(wb[:, :, :half, -half:], right_bottom[:, :, ::-1, ::-1])
+    right_top = input[:, :, -half:, -half:]
+    wb = T.set_subtensor(wb[:, :, -half:, -half:], right_top[:, :, ::-1, ::-1])
+    return wb
+
+
+_downsample_layer = Convolution2D(1, 1, 5, 5, subsample=(2, 2), border_mode='valid')
+_downsample_layer_weight = _gaussian_blur_kernel/256.
+_downsample_layer.W = theano.shared(_downsample_layer_weight)
 
 
 def downsample(input):
     if type(input) == list:
         assert len(input) == 1
         input = input[0]
+    input = _add_virtual_border(input)
     _downsample_layer.input = input
     return _downsample_layer.get_output(train=False)
