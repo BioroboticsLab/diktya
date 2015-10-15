@@ -21,8 +21,7 @@ from keras.layers.core import Dense, Dropout, MaxoutDense, Flatten
 
 from keras.models import Sequential
 import math
-from keras.utils.theano_utils import sharedX
-from beras.gan import GAN, stack_laplacian_gans
+from beras.gan import GAN
 import numpy as np
 import matplotlib.pyplot as plt
 from beras.util import LossPrinter
@@ -94,42 +93,8 @@ def test_gan_learn_simle_distribution():
     discriminator.add(Dense(20, 1, activation='sigmoid', name='d_dense3'))
     gan = GAN(generator, discriminator, (batch_size//2, nb_z))
     gan.compile('adam', 'adam', mode='FAST_RUN')
-    return
     gan.fit(X, nb_epoch=1, verbose=0, batch_size=batch_size,
             callbacks=[LossPrinter(), Plotter(X, "epoches_plot")])
-
-
-def test_stack_laplacian_gens():
-    g1 = Sequential()
-    g1.add(Convolution2D(5, 2, 2, 2, activation='relu', border_mode='same'))
-    g1.add(Convolution2D(1, 5, 2, 2, activation='sigmoid', border_mode='same'))
-
-    g2 = Sequential()
-    g2.add(Convolution2D(5, 2, 2, 2, activation='relu', border_mode='same'))
-    g2.add(Convolution2D(1, 5, 2, 2, activation='sigmoid', border_mode='same'))
-
-    z_shape_g1 = (16, 1, 8, 8)
-    z_shape_g2 = (16, 1, 16, 16)
-    outs, images = stack_laplacian_gans([g1, g2], init_z_shape=z_shape_g1)
-    assert len(images) == 1
-    assert (outs[0].shape.eval() == (16, 1, 8, 8)).all()
-    assert (outs[1].shape.eval() == (16, 1, 16, 16)).all()
-    assert (images[0].shape.eval() == (16, 1, 16, 16)).all()
-
-    g1_x = sharedX(np.ones(z_shape_g1))
-    g2_x = sharedX(np.ones(z_shape_g2))
-    outs_cond, images_cond = stack_laplacian_gans([g1, g2], init_z_shape=z_shape_g1, conditional_inputs=[g1_x, g2_x])
-
-    assert len(images_cond) == 1
-    assert (outs_cond[0].shape.eval() == (16, 1, 8, 8)).all()
-    assert (outs_cond[1].shape.eval() == (16, 1, 16, 16)).all()
-    assert (images_cond[0].shape.eval() == (16, 1, 16, 16)).all()
-
-    init_image = sharedX(np.ones(z_shape_g1))
-    outs_cond, images_cond = stack_laplacian_gans([g1, g2],
-                                                  init_z_shape=z_shape_g1,
-                                                  init_image=init_image)
-    assert len(images_cond) == 2
 
 
 def test_conditional_conv_gan():
