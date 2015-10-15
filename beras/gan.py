@@ -23,10 +23,6 @@ import numpy as np
 from beras.models import AbstractModel
 from beras.util import upsample
 
-
-
-
-
 _rs = T_random.RandomStreams(1334)
 
 
@@ -64,54 +60,75 @@ def stack_laplacian_gans(generators: list, init_z_shape, init_image=None,
         gans_outs.append(out)
         previous_out = out
         z_shape = scale_shape_up(z_shape)
-    return gans_outs, images
+    return gans_outs, images, conditional_inputs
 
 
 class GAN(AbstractModel):
     def __init__(self, generator: Sequential, discremenator: Sequential,
-                 z_shape, num_gen_conditional=0, both_conditional=0):
+                 z_shape, num_gen_conditional=0, num_dis_conditional=0, num_both_conditional=0):
+        self.num_dis_conditional = num_dis_conditional
         self.G = generator
         self.D = discremenator
         self.num_gen_conditional = num_gen_conditional
-        self.num_both_conditional = both_conditional
+        self.num_both_conditional = num_both_conditional
         self.rs = T_random.RandomStreams(1334)
         self.z_shape = z_shape
 
-    def compile(self, optimizer_g, optimizer_d, mode=None):
-        self.optimizer_d = optimizers.get(optimizer_d)
-        self.optimizer_g = optimizers.get(optimizer_g)
-
+    def _get_gen_output(self, gen_conditional, train=True):
+        gen_conditional = standardize_X(gen_conditional)
         z = self.rs.uniform(self.z_shape, -1, 1)
-        gen_conditional = [T.tensor4("gen_conditional_{}".format(i))
-                           for i in range(self.num_gen_conditional)]
-        both_conditional = [T.tensor4("conditional_{}".format(i))
-                          for i in range(self.num_both_conditional)]
-        g_input = T.concatenate([z] + gen_conditional + both_conditional, axis=1)
+        g_input = T.concatenate([z] + gen_conditional, axis=1)
         self.G.layers[0].input = g_input
-        self.g_out = self.G.get_output(train=True)
-        # reset D's input to X
-        x_real = ndim_tensor(len(self.z_shape))
-        d_in = T.concatenate([self.g_out, x_real])
-        if both_conditional:
-            d_in = T.concatenate([d_in, both_conditional], axis=1)
+        return self.G.get_output(train)
+
+    def _get_dis_output(self, gen_out, x_real, dis_conditional, train=True):
+        dis_conditional = standardize_X(dis_conditional)
+        d_in = T.concatenate([gen_out, x_real])
+        if dis_conditional:
+            d_in = T.concatenate([d_in] + dis_conditional, axis=1)
         self.D.layers[0].input = d_in
-        self.d_out = self.D.get_output(train=True)
+        return self.D.get_output(train)
+
+    def losses(self, x_real, gen_conditional=[], dis_conditional=[],
+               both_conditional=[], gen_out=None):
+        if gen_out is None:
+            gen_out = self._get_gen_output(gen_conditional + both_conditional)
+        self.g_out = gen_out
+        self.d_out = self._get_dis_output(gen_out, x_real,
+                                          dis_conditional + both_conditional)
         batch_size = self.d_out.shape[0]
         d_out_given_g = self.d_out[:batch_size//2]
         d_out_given_x = self.d_out[batch_size//2:]
         d_loss_real = bce(d_out_given_x, T.ones_like(d_out_given_x)).mean()
         d_loss_gen = bce(d_out_given_g, T.zeros_like(d_out_given_g)).mean()
         d_loss = d_loss_real + d_loss_gen
-        d_updates = self.optimizer_d.get_updates(
-            self.D.params, self.D.constraints, d_loss)
 
         g_loss = bce(d_out_given_g, T.ones_like(d_out_given_g)).mean()
+        return g_loss, d_loss, d_loss_real, d_loss_gen
+
+    def compile(self, optimizer_g, optimizer_d, mode=None):
+        self.optimizer_d = optimizers.get(optimizer_d)
+        self.optimizer_g = optimizers.get(optimizer_g)
+
+        x_real = ndim_tensor(len(self.z_shape))
+        gen_conditional = [T.tensor4("gen_conditional_{}".format(i))
+                           for i in range(self.num_gen_conditional)]
+        both_conditional = [T.tensor4("conditional_{}".format(i))
+                            for i in range(self.num_both_conditional)]
+        dis_conditional = [T.tensor4("dis_conditional_{}".format(i))
+                           for i in range(self.num_dis_conditional)]
+
+        g_loss, d_loss, d_loss_real, d_loss_gen = \
+            self.losses(x_real, gen_conditional, dis_conditional, both_conditional)
+
         g_updates = self.optimizer_g.get_updates(
             self.G.params, self.G.constraints, g_loss)
-        self._train = theano.function([x_real] + gen_conditional + both_conditional,
+        d_updates = self.optimizer_d.get_updates(
+            self.D.params, self.D.constraints, d_loss)
+        self._train = theano.function([x_real] + gen_conditional + dis_conditional + both_conditional,
             [d_loss, d_loss_real, d_loss_gen, g_loss], updates=d_updates + g_updates,
             allow_input_downcast=True, mode=mode)
-        self._generate = theano.function(gen_conditional + both_conditional,
+        self._generate = theano.function(gen_conditional + dis_conditional + both_conditional,
                                          [self.g_out],
                                          allow_input_downcast=True,
                                          mode=mode)
@@ -152,9 +169,3 @@ class GAN(AbstractModel):
         for i in range(k):
             self._d_train([X, ZD])
         self._d_train([ZG])
-
-
-        # in the original paper D gets the upsamples real coarse image.
-        # We have a faked coarse and a real coarse image.
-        # To prevent D from making his decision on the faked coarse image, we
-        # do not feed D the coarse images.
