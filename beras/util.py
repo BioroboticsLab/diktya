@@ -14,7 +14,10 @@
 import os
 import keras
 from keras.callbacks import Callback
+from keras.layers.convolutional import UpSample2D, Convolution2D
 import numpy as np
+import theano
+import theano.tensor as T
 from scipy.misc import imsave
 
 
@@ -49,3 +52,28 @@ class Sample(keras.callbacks.Callback):
 
             imsave(outpath,
                    (sample[i]*255).reshape(3, 16, 16).astype(np.uint8))
+
+_upsample_layer = UpSample2D()
+
+
+def upsample(input):
+    if type(input) == list:
+        assert len(input) == 1
+        input = input[0]
+    _upsample_layer.input = input
+    return _upsample_layer.get_output(train=False)
+
+
+_downsample_layer = Convolution2D(1, 1, 2, 2, subsample=(2, 2), border_mode='same')
+_downsample_layer.W = theano.shared(np.asarray([[[
+    [0.25, 0.25],
+    [0.25, 0.25]
+]]]))
+
+
+def downsample(input):
+    if type(input) == list:
+        assert len(input) == 1
+        input = input[0]
+    _downsample_layer.input = input
+    return _downsample_layer.get_output(train=False)

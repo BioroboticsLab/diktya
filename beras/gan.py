@@ -19,31 +19,13 @@ import theano.tensor as T
 from theano.tensor.nnet import binary_crossentropy as bce
 from keras.models import Sequential, standardize_X
 from keras import optimizers
-from keras.layers.convolutional import UpSample2D, Convolution2D
 import numpy as np
 from beras.models import AbstractModel
+from beras.util import upsample
 
 
-_upsample_layer = UpSample2D()
 
 
-def upsample(input):
-    if type(input) == list:
-        assert len(input) == 1
-        input = input[0]
-    _upsample_layer.input = input
-    return _upsample_layer.get_output(train=False)
-
-
-_downsample_layer = Convolution2D(1, 1, 2, 2, subsample=(2, 2))
-
-
-def downsample(input):
-    if type(input) == list:
-        assert len(input) == 1
-        input = input[0]
-    _downsample_layer.input = input
-    return _downsample_layer.get_output(train=False)
 
 _rs = T_random.RandomStreams(1334)
 
