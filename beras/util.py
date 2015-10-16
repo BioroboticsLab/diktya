@@ -85,25 +85,25 @@ def _add_virtual_border(input, filter_size=5):
     wb = T.zeros((shp[0], shp[1], shp[2]+2*half, shp[3]+2*half))
     wb = T.set_subtensor(wb[:, :, half:shp[2]+half, half:shp[3]+half], input)
 
-    top = input[:, :, :half, :]
+    top = input[:, :, 1:half+1, :]
     wb = T.set_subtensor(wb[:, :, :half, half:shp[3]+half], top[:, :, ::-1, :])
 
-    bottom = input[:, :, -half:, :]
+    bottom = input[:, :, -half-1:-1, :]
     wb = T.set_subtensor(wb[:, :, -half:, half:shp[3]+half], bottom[:, :, ::-1, :])
 
-    left = input[:, :, :, :half]
+    left = input[:, :, :, 1:half+1]
     wb = T.set_subtensor(wb[:, :, half:shp[2]+half, :half], left[:, :, :, ::-1])
 
-    right = input[:, :, :, -half:]
+    right = input[:, :, :, -half-1:-1]
     wb = T.set_subtensor(wb[:, :, half:shp[2]+half, -half:], right[:, :, :, ::-1])
 
-    left_top = input[:, :, :half, :half]
+    left_top = input[:, :, 1:half+1, 1:half+1]
     wb = T.set_subtensor(wb[:, :, :half, :half], left_top[:, :, ::-1, ::-1])
-    left_bottom = input[:, :, -half:, :half]
+    left_bottom = input[:, :, -half-1:-1, 1:half+1]
     wb = T.set_subtensor(wb[:, :, -half:, :half], left_bottom[:, :, ::-1, ::-1])
-    right_bottom = input[:, :, :half, -half:]
+    right_bottom = input[:, :, 1:half+1, -half-1:-1]
     wb = T.set_subtensor(wb[:, :, :half, -half:], right_bottom[:, :, ::-1, ::-1])
-    right_top = input[:, :, -half:, -half:]
+    right_top = input[:, :, -half-1:-1, -half-1:-1]
     wb = T.set_subtensor(wb[:, :, -half:, -half:], right_top[:, :, ::-1, ::-1])
     return wb
 
