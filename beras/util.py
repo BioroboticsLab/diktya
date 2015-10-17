@@ -61,7 +61,7 @@ _gaussian_blur_kernel = np.asarray([[[
     [6., 24., 36., 24., 6.],
     [4., 16., 24., 16., 4.],
     [1., 4., 6., 4., 1.]
-]]])
+]]], dtype=theano.config.floatX)
 _upsample_layer_weight = _gaussian_blur_kernel/64.
 _upsample_layer.W = theano.shared(_upsample_layer_weight)
 
