@@ -99,11 +99,12 @@ class GAN(AbstractModel):
         batch_size = self.d_out.shape[0]
         d_out_given_g = self.d_out[:batch_size//2]
         d_out_given_x = self.d_out[batch_size//2:]
-        d_loss_real = bce(d_out_given_x, T.ones_like(d_out_given_x)).mean()
-        d_loss_gen = bce(d_out_given_g, T.zeros_like(d_out_given_g)).mean()
+        clip = lambda x: T.clip(x, 1e-7, 1.0 - 1e-7)
+        d_loss_real = bce(clip(d_out_given_x), T.ones_like(d_out_given_x)).mean()
+        d_loss_gen = bce(clip(d_out_given_g), T.zeros_like(d_out_given_g)).mean()
         d_loss = d_loss_real + d_loss_gen
 
-        g_loss = bce(d_out_given_g, T.ones_like(d_out_given_g)).mean()
+        g_loss = bce(clip(d_out_given_g), T.ones_like(d_out_given_g)).mean()
         return g_loss, d_loss, d_loss_real, d_loss_gen
 
     def compile(self, optimizer_g, optimizer_d, mode=None):
