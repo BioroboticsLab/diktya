@@ -94,7 +94,10 @@ def test_gan_learn_simle_distribution():
     gan = GAN(generator, discriminator, (batch_size//2, nb_z))
     gan.compile('adam', 'adam', mode='FAST_RUN')
     gan.fit(X, nb_epoch=1, verbose=0, batch_size=batch_size,
-            callbacks=[LossPrinter(), Plotter(X, "epoches_plot")])
+            callbacks=[LossPrinter(),
+                       # uncomment to generate images
+                       # Plotter(X, "epoches_plot")
+                       ])
 
 
 def test_conditional_conv_gan():
