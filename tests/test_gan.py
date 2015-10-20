@@ -19,7 +19,7 @@ import keras.initializations
 from keras.layers.convolutional import Convolution2D, UpSample2D, MaxPooling2D
 from keras.layers.core import Dense, Dropout, MaxoutDense, Flatten
 
-from keras.models import Sequential
+from keras.models import Sequential, Graph
 import math
 from beras.gan import GAN
 import numpy as np
@@ -98,6 +98,24 @@ def test_gan_learn_simle_distribution():
                        # uncomment to generate images
                        # Plotter(X, "epoches_plot")
                        ])
+
+
+def test_gan_graph():
+    g1 = Graph()
+    g1.add_input("input", ndim=4)
+    g1.add_node(Convolution2D(10, 2, 2, 2, activation='relu', border_mode='same'),
+                name="conv", input='input')
+    g1.add_output("output", input='conv')
+
+    d1 = Sequential()
+    d1.add(Convolution2D(5, 1, 2, 2, activation='relu'))
+    d1.add(Flatten())
+    d1.add(Dense(64, 1, activation='sigmoid'))
+
+    z_shape = (1, 1, 8, 8)
+    gan = GAN(g1, d1, z_shape, num_gen_conditional=1)
+    gan.compile('adam', 'adam', 'FAST_COMPILE')
+    gan.generate(np.zeros(z_shape))
 
 
 def test_conditional_conv_gan():

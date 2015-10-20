@@ -17,7 +17,7 @@ import theano
 import theano.tensor.shared_randomstreams as T_random
 import theano.tensor as T
 from theano.tensor.nnet import binary_crossentropy as bce
-from keras.models import Sequential, standardize_X
+from keras.models import Sequential, standardize_X, Graph
 from keras import optimizers
 import numpy as np
 from beras.models import AbstractModel
@@ -29,7 +29,7 @@ _rs = T_random.RandomStreams(1334)
 def get_generator_output(gen, z_shape, train=True, conditional_inputs=[]):
     z = _rs.uniform(z_shape, -1, 1)
     g_input = T.concatenate([z] + conditional_inputs, axis=1)
-    gen.layers[0].input = g_input
+    GAN._set_input(gen, g_input)
     return gen.get_output(train)
 
 
@@ -64,7 +64,7 @@ def stack_laplacian_gans(generators: list, init_z_shape, init_image=None,
 
 
 class GAN(AbstractModel):
-    def __init__(self, generator: Sequential, discremenator: Sequential,
+    def __init__(self, generator, discremenator,
                  z_shape, num_gen_conditional=0, num_dis_conditional=0, num_both_conditional=0):
         self.num_dis_conditional = num_dis_conditional
         self.G = generator
@@ -74,11 +74,20 @@ class GAN(AbstractModel):
         self.rs = T_random.RandomStreams(1334)
         self.z_shape = z_shape
 
+    @staticmethod
+    def _set_input(model, input):
+        if type(model) == Sequential:
+            model.layers[0].input = input
+        elif type(model) == Graph:
+            model.inputs["input"].input = input
+        else:
+            ValueError("model must be either Graph of Sequential")
+
     def _get_gen_output(self, gen_conditional, train=True):
         gen_conditional = standardize_X(gen_conditional)
         z = self.rs.uniform(self.z_shape, -1, 1)
         g_input = T.concatenate([z] + gen_conditional, axis=1)
-        self.G.layers[0].input = g_input
+        self._set_input(self.G, g_input)
         return self.G.get_output(train)
 
     def _get_dis_output(self, gen_out, x_real, dis_conditional, train=True):
@@ -86,7 +95,7 @@ class GAN(AbstractModel):
         d_in = T.concatenate([gen_out, x_real])
         if dis_conditional:
             d_in = T.concatenate([d_in] + dis_conditional, axis=1)
-        self.D.layers[0].input = d_in
+        self._set_input(self.D, d_in)
         return self.D.get_output(train)
 
     def losses(self, x_real, gen_conditional=[], dis_conditional=[],
