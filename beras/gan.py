@@ -27,15 +27,19 @@ _rs = T_random.RandomStreams(1334)
 
 
 class GAN(AbstractModel):
+    ndim = 4
+
     def __init__(self, generator, discremenator,
-                 z_shape, num_gen_conditional=0, num_dis_conditional=0, num_both_conditional=0):
+                 z_shapes, num_gen_conditional=0, num_dis_conditional=0, num_both_conditional=0):
         self.num_dis_conditional = num_dis_conditional
         self.G = generator
         self.D = discremenator
         self.num_gen_conditional = num_gen_conditional
         self.num_both_conditional = num_both_conditional
         self.rs = T_random.RandomStreams(1334)
-        self.z_shape = z_shape
+        if type(z_shapes) not in [list, tuple]:
+            z_shapes = [z_shapes]
+        self.z_shapes = z_shapes
 
     @staticmethod
     def _set_input(model, inputs, labels):
@@ -58,10 +62,13 @@ class GAN(AbstractModel):
 
     def _get_gen_output(self, gen_conditional, train=True):
         gen_conditional = standardize_X(gen_conditional)
-        z = self.rs.uniform(self.z_shape, -1, 1)
-        self._set_input(self.G, [z] + gen_conditional,
-                        ["z"] + ["cond_{}".format(i)
-                                 for i in range(len(gen_conditional))])
+        zs = [self.rs.uniform(z, -1, 1) for z in self.z_shapes]
+        z_labels = ["z_{}".format(i) for i in range(len(self.z_shapes))]
+        if len(z_labels) == 1:
+            z_labels = ["z"]
+        self._set_input(self.G, zs + gen_conditional,
+                        z_labels + ["cond_{}".format(i)
+                                    for i in range(len(gen_conditional))])
         return self._get_output(self.G, train)
 
     def _get_dis_output(self, gen_out, x_real, dis_conditional, train=True):
@@ -95,7 +102,7 @@ class GAN(AbstractModel):
         self.optimizer_d = optimizers.get(optimizer_d)
         self.optimizer_g = optimizers.get(optimizer_g)
 
-        x_real = ndim_tensor(len(self.z_shape))
+        x_real = ndim_tensor(self.ndim)
         gen_conditional = [T.tensor4("gen_conditional_{}".format(i))
                            for i in range(self.num_gen_conditional)]
         both_conditional = [T.tensor4("conditional_{}".format(i))
