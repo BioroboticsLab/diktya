@@ -54,7 +54,8 @@ class Sample(keras.callbacks.Callback):
                    (sample[i]*255).reshape(3, 16, 16).astype(np.uint8))
 
 
-_upsample_layer = Convolution2D(1, 1, 5, 5, border_mode='valid')
+_upsample_layer = Convolution2D(1, 5, 5, border_mode='valid',
+                                input_shape=(1, None, None))
 _gaussian_blur_kernel = np.asarray([[[
     [1., 4., 6., 4., 1.],
     [4., 16., 24., 16., 4.],
@@ -108,7 +109,9 @@ def _add_virtual_border(input, filter_size=5):
     return wb
 
 
-_downsample_layer = Convolution2D(1, 1, 5, 5, subsample=(2, 2), border_mode='valid')
+_downsample_layer = Convolution2D(1, 5, 5, subsample=(2, 2),
+                                  border_mode='valid',
+                                  input_shape=(1, None, None))
 _downsample_layer_weight = _gaussian_blur_kernel/256.
 _downsample_layer.W = theano.shared(_downsample_layer_weight)
 

@@ -26,43 +26,6 @@ from beras.util import upsample
 _rs = T_random.RandomStreams(1334)
 
 
-def get_generator_output(gen, z_shape, train=True, conditional_inputs=[]):
-    z = _rs.uniform(z_shape, -1, 1)
-    g_input = T.concatenate([z] + conditional_inputs, axis=1)
-    GAN._set_input(gen, g_input)
-    return gen.get_output(train)
-
-
-def stack_laplacian_gans(generators: list, init_z_shape, init_image=None,
-                         conditional_inputs=None, train=True):
-    """Stacks multiple gan to a laplacian pyramid"""
-    scale_shape_up = lambda shp: (shp[0], shp[1], shp[2]*2, shp[3]*2)
-    assert len(generators) >= 2
-
-    if conditional_inputs is None:
-        conditional_inputs = [[] for i in generators]
-
-    previous_out = []
-    if init_image is not None:
-        previous_out = [init_image]
-    gans_outs = []
-    images = []
-    z_shape = init_z_shape
-    for gen, cond_ins in zip(generators, conditional_inputs):
-        cond_ins = standardize_X(cond_ins)
-        if previous_out:
-            previous_out = upsample(previous_out)
-        previous_out = standardize_X(previous_out)
-        out = get_generator_output(gen, z_shape, train, previous_out + cond_ins)
-        if previous_out:
-            image = previous_out[0] + out[0]
-            images.append(image)
-        gans_outs.append(out)
-        previous_out = out
-        z_shape = scale_shape_up(z_shape)
-    return gans_outs, images, conditional_inputs
-
-
 class GAN(AbstractModel):
     def __init__(self, generator, discremenator,
                  z_shape, num_gen_conditional=0, num_dis_conditional=0, num_both_conditional=0):
@@ -75,28 +38,40 @@ class GAN(AbstractModel):
         self.z_shape = z_shape
 
     @staticmethod
-    def _set_input(model, input):
+    def _set_input(model, inputs, labels):
         if type(model) == Sequential:
+            input = T.concatenate(inputs, axis=1)
             model.layers[0].input = input
         elif type(model) == Graph:
-            model.inputs["input"].input = input
+            for label, input in zip(labels, inputs):
+                model.inputs[label].input = input
         else:
             ValueError("model must be either Graph of Sequential")
+
+    @staticmethod
+    def _get_output(model, train=True):
+        out = model.get_output(train)
+        if type(out) == dict:
+            return out["output"]
+        else:
+            return out
 
     def _get_gen_output(self, gen_conditional, train=True):
         gen_conditional = standardize_X(gen_conditional)
         z = self.rs.uniform(self.z_shape, -1, 1)
-        g_input = T.concatenate([z] + gen_conditional, axis=1)
-        self._set_input(self.G, g_input)
-        return self.G.get_output(train)
+        self._set_input(self.G, [z] + gen_conditional,
+                        ["z"] + ["cond_{}".format(i)
+                                 for i in range(len(gen_conditional))])
+        return self._get_output(self.G, train)
 
     def _get_dis_output(self, gen_out, x_real, dis_conditional, train=True):
         dis_conditional = standardize_X(dis_conditional)
         d_in = T.concatenate([gen_out, x_real])
-        if dis_conditional:
-            d_in = T.concatenate([d_in] + dis_conditional, axis=1)
-        self._set_input(self.D, d_in)
-        return self.D.get_output(train)
+        self._set_input(self.D, [d_in] + dis_conditional,
+                        ["input"] +
+                        ["cond_{}".format(i)
+                         for i in range(len(dis_conditional))])
+        return self._get_output(self.D, train)
 
     def losses(self, x_real, gen_conditional=[], dis_conditional=[],
                both_conditional=[], gen_out=None):

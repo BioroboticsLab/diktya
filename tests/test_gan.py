@@ -79,18 +79,18 @@ def test_gan_learn_simle_distribution():
     nb_z = 20
     batch_size = 128
     generator = Sequential()
-    generator.add(Dense(nb_z, nb_z, activation='relu', name='d_dense1'))
+    generator.add(Dense(nb_z, activation='relu', input_dim=nb_z))
     generator.add(Dropout(0.5))
-    generator.add(Dense(nb_z, nb_z, activation='relu', name='d_dense2'))
+    generator.add(Dense(nb_z, activation='relu'))
     generator.add(Dropout(0.5))
-    generator.add(Dense(nb_z, 2, name='d_dense3'))
+    generator.add(Dense(2))
 
     discriminator = Sequential()
-    discriminator.add(MaxoutDense(2, 20, nb_feature=5))
+    discriminator.add(MaxoutDense(20, nb_feature=5, input_dim=2))
     discriminator.add(Dropout(0.5))
-    discriminator.add(MaxoutDense(20, 20, nb_feature=5))
+    discriminator.add(MaxoutDense(20, nb_feature=5))
     discriminator.add(Dropout(0.5))
-    discriminator.add(Dense(20, 1, activation='sigmoid', name='d_dense3'))
+    discriminator.add(Dense(1, activation='sigmoid'))
     gan = GAN(generator, discriminator, (batch_size//2, nb_z))
     gan.compile('adam', 'adam', mode='FAST_RUN')
     gan.fit(X, nb_epoch=1, verbose=0, batch_size=batch_size,
@@ -102,15 +102,16 @@ def test_gan_learn_simle_distribution():
 
 def test_gan_graph():
     g1 = Graph()
-    g1.add_input("input", ndim=4)
-    g1.add_node(Convolution2D(10, 2, 2, 2, activation='relu', border_mode='same'),
-                name="conv", input='input')
+    g1.add_input("z", (1, 8, 8))
+    g1.add_input("cond_0", (1, 8, 8))
+    g1.add_node(Convolution2D(10, 2, 2, activation='relu', border_mode='same'),
+                name="conv", inputs=['z', 'cond_0'], concat_axis=1)
     g1.add_output("output", input='conv')
 
     d1 = Sequential()
-    d1.add(Convolution2D(5, 1, 2, 2, activation='relu'))
+    d1.add(Convolution2D(5, 2, 2, activation='relu', input_shape=(1, 8, 8)))
     d1.add(Flatten())
-    d1.add(Dense(64, 1, activation='sigmoid'))
+    d1.add(Dense(1, input_dim=20, activation='sigmoid'))
 
     z_shape = (1, 1, 8, 8)
     gan = GAN(g1, d1, z_shape, num_gen_conditional=1)
@@ -120,18 +121,18 @@ def test_gan_graph():
 
 def test_conditional_conv_gan():
     g1 = Sequential()
-    g1.add(Convolution2D(10, 2, 2, 2, activation='relu', border_mode='same'))
+    g1.add(Convolution2D(10, 2, 2, activation='relu', border_mode='same', input_shape=(2, 8, 8)))
     g1.add(UpSample2D((2, 2)))
-    g1.add(Convolution2D(1, 10, 2, 2, activation='sigmoid', border_mode='same'))
+    g1.add(Convolution2D(1, 2, 2, activation='sigmoid', border_mode='same'))
 
     d1 = Sequential()
-    d1.add(Convolution2D(5, 1, 2, 2, activation='relu'))
+    d1.add(Convolution2D(5, 2, 2, activation='relu', input_shape=(1, 8, 8)))
     d1.add(MaxPooling2D())
     d1.add(Dropout(0.5))
     d1.add(Flatten())
-    d1.add(Dense(30, 10, activation='relu'))
+    d1.add(Dense(10, activation='relu'))
     d1.add(Dropout(0.5))
-    d1.add(Dense(20, 1, activation='sigmoid'))
+    d1.add(Dense(1, activation='sigmoid'))
     z_shape = (1, 1, 8, 8)
     gan = GAN(g1, d1, z_shape, num_gen_conditional=1)
     gan.compile('adam', 'adam', 'FAST_COMPILE')

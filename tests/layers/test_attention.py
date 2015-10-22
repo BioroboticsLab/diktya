@@ -57,12 +57,14 @@ def test_rotates_images():
 
 def get_net():
     rotnet = Sequential()
-    rotnet.add(Convolution2D(1, 1, 2, 2))
-    rotnet.add(Convolution2D(1, 1, 2, 2))
+    rotnet.add(Convolution2D(1, 2, 2, input_shape=(1, 8, 8)))
+    rotnet.add(Convolution2D(1, 2, 2))
 
     net = Sequential()
-    net.add(RotationTransformer(rotnet, return_theta=True))
-    net.add(Convolution2D(1, 1, 2, 2))
+    net.add(RotationTransformer(rotnet, return_theta=True,
+                                input_shape=(1, 8, 8)))
+    print(net.layers[0].output_shape)
+    net.add(Convolution2D(1, 2, 2))
     return net, rotnet
 
 

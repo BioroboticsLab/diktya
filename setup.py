@@ -9,7 +9,7 @@ setup(name='beras',
       author_email='github@leon-sixt.de',
       install_requires=[
             "numpy>=1.9",
-            "keras==0.1.3",
+            "keras==0.2.0",
             "pytest>=2.7.2",
             "scikit-image>=0.11.3",
             "seya"
