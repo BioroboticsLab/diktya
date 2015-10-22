@@ -92,7 +92,7 @@ def test_gan_learn_simle_distribution():
     discriminator.add(Dropout(0.5))
     discriminator.add(Dense(1, activation='sigmoid'))
     gan = GAN(generator, discriminator, (batch_size//2, nb_z))
-    gan.compile('adam', 'adam', mode='FAST_RUN')
+    gan.compile('adam', 'adam', mode='FAST_RUN', ndim_gen_out=2)
     gan.fit(X, nb_epoch=1, verbose=0, batch_size=batch_size,
             callbacks=[LossPrinter(),
                        # uncomment to generate images

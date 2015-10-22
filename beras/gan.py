@@ -37,14 +37,17 @@ class GAN(AbstractModel):
         self.num_gen_conditional = num_gen_conditional
         self.num_both_conditional = num_both_conditional
         self.rs = T_random.RandomStreams(1334)
-        if type(z_shapes) not in [list, tuple]:
+        if type(z_shapes[0]) not in [list, tuple]:
             z_shapes = [z_shapes]
         self.z_shapes = z_shapes
 
     @staticmethod
     def _set_input(model, inputs, labels):
         if type(model) == Sequential:
-            input = T.concatenate(inputs, axis=1)
+            if len(inputs) != 1:
+                input = T.concatenate(inputs, axis=1)
+            else:
+                input = inputs[0]
             model.layers[0].input = input
         elif type(model) == Graph:
             for label, input in zip(labels, inputs):
@@ -98,11 +101,11 @@ class GAN(AbstractModel):
         g_loss = bce(clip(d_out_given_g), T.ones_like(d_out_given_g)).mean()
         return g_loss, d_loss, d_loss_real, d_loss_gen
 
-    def compile(self, optimizer_g, optimizer_d, mode=None):
+    def compile(self, optimizer_g, optimizer_d, mode=None, ndim_gen_out=4):
         self.optimizer_d = optimizers.get(optimizer_d)
         self.optimizer_g = optimizers.get(optimizer_g)
 
-        x_real = ndim_tensor(self.ndim)
+        x_real = ndim_tensor(ndim_gen_out)
         gen_conditional = [T.tensor4("gen_conditional_{}".format(i))
                            for i in range(self.num_gen_conditional)]
         both_conditional = [T.tensor4("conditional_{}".format(i))
