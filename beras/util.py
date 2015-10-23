@@ -63,8 +63,14 @@ _gaussian_blur_kernel = np.asarray([[[
     [4., 16., 24., 16., 4.],
     [1., 4., 6., 4., 1.]
 ]]], dtype=theano.config.floatX)
-_blur_layer_weight = _gaussian_blur_kernel/64.
+_blur_layer_weight = _gaussian_blur_kernel/256.
 _blur_layer.W = theano.shared(_blur_layer_weight)
+
+
+_upsample_layer = Convolution2D(1, 5, 5, border_mode='valid',
+                                input_shape=(1, None, None))
+_upsample_layer_weight = _gaussian_blur_kernel/64.
+_upsample_layer.W = theano.shared(_upsample_layer)
 
 
 def upsample(input):
@@ -75,8 +81,8 @@ def upsample(input):
     upsampled = T.zeros((shp[0], shp[1], 2*shp[2], 2*shp[3]))
     upsampled = T.set_subtensor(upsampled[:, :, ::2, ::2], input)
     upsampled = _add_virtual_border(upsampled)
-    _blur_layer.input = upsampled
-    return _blur_layer.get_output(train=False)
+    _upsample_layer.input = upsampled
+    return _upsample_layer.get_output(train=False)
 
 
 def blur(input):
