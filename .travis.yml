@@ -11,7 +11,7 @@ install:
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
   - conda info -a
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib pytest h5py pillow
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy=1.9.3 scipy matplotlib pytest h5py pillow
   - source activate test-environment
   - pip install git+https://github.com/Theano/Theano.git#egg=theano
   - pip install git+https://github.com/berleon/seya.git@8430eb9ca7e86e7bb73a929bb647cc0f59956206#egg=seya
