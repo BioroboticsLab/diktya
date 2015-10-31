@@ -13,6 +13,7 @@
 # limitations under the License.
 import scipy
 import skimage
+import skimage.transform
 import theano
 import numpy as np
 from beras.util import _add_virtual_border, downsample, upsample
