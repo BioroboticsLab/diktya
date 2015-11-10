@@ -16,6 +16,7 @@ from keras.utils.theano_utils import ndim_tensor
 import theano
 import theano.tensor.shared_randomstreams as T_random
 import theano.tensor as T
+from theano.sandbox.cuda.basic_ops import  gpu_contiguous
 from theano.tensor.nnet import binary_crossentropy as bce
 from keras.models import Sequential, standardize_X, Graph
 from keras import optimizers
@@ -86,7 +87,8 @@ class GAN(AbstractModel):
     def losses(self, x_real, gen_conditional=[], dis_conditional=[],
                both_conditional=[], gen_out=None):
         if gen_out is None:
-            gen_out = self._get_gen_output(gen_conditional + both_conditional)
+            gen_out = gpu_contiguous(self._get_gen_output(gen_conditional +
+                                                          both_conditional))
         self.g_out = gen_out
         self.d_out = self._get_dis_output(gen_out, x_real,
                                           dis_conditional + both_conditional)

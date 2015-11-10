@@ -54,8 +54,6 @@ class Sample(keras.callbacks.Callback):
                    (sample[i]*255).reshape(3, 16, 16).astype(np.uint8))
 
 
-_blur_layer = Convolution2D(1, 5, 5, border_mode='valid',
-                            input_shape=(1, None, None))
 _gaussian_blur_kernel = np.asarray([[[
     [1., 4., 6., 4., 1.],
     [4., 16., 24., 16., 4.],
@@ -63,26 +61,23 @@ _gaussian_blur_kernel = np.asarray([[[
     [4., 16., 24., 16., 4.],
     [1., 4., 6., 4., 1.]
 ]]], dtype=theano.config.floatX)
-_blur_layer_weight = _gaussian_blur_kernel/256.
-_blur_layer.W = theano.shared(_blur_layer_weight)
-
-
-_upsample_layer = Convolution2D(1, 5, 5, border_mode='valid',
-                                input_shape=(1, None, None))
-_upsample_layer_weight = _gaussian_blur_kernel/64.
-_upsample_layer.W = theano.shared(_upsample_layer)
 
 
 def upsample(input):
     if type(input) == list:
         assert len(input) == 1
         input = input[0]
+
+    upsample_layer = Convolution2D(1, 5, 5, border_mode='valid',
+                                   input_shape=(1, None, None))
+    upsample_layer_weight = _gaussian_blur_kernel/64.
+    upsample_layer.W = theano.shared(upsample_layer)
     shp = input.shape
     upsampled = T.zeros((shp[0], shp[1], 2*shp[2], 2*shp[3]))
     upsampled = T.set_subtensor(upsampled[:, :, ::2, ::2], input)
     upsampled = _add_virtual_border(upsampled)
-    _upsample_layer.input = upsampled
-    return _upsample_layer.get_output(train=False)
+    upsample_layer.input = upsampled
+    return upsample_layer.get_output(train=False)
 
 
 def blur(input):
@@ -90,8 +85,14 @@ def blur(input):
         assert len(input) == 1
         input = input[0]
     with_border = _add_virtual_border(input)
-    _blur_layer.input = with_border
-    return _blur_layer.get_output(train=False)
+
+    blur_layer = Convolution2D(1, 5, 5, border_mode='valid',
+                                input_shape=(1, None, None))
+
+    blur_layer_weight = _gaussian_blur_kernel/256.
+    blur_layer.W = theano.shared(blur_layer_weight)
+    blur_layer.input = with_border
+    return blur_layer.get_output(train=False)
 
 
 def _add_virtual_border(input, filter_size=5):
@@ -124,17 +125,16 @@ def _add_virtual_border(input, filter_size=5):
     return wb
 
 
-_downsample_layer = Convolution2D(1, 5, 5, subsample=(2, 2),
-                                  border_mode='valid',
-                                  input_shape=(1, None, None))
-_downsample_layer_weight = _gaussian_blur_kernel/256.
-_downsample_layer.W = theano.shared(_downsample_layer_weight)
-
-
 def downsample(input):
     if type(input) == list:
         assert len(input) == 1
         input = input[0]
+
+    downsample_layer = Convolution2D(1, 5, 5, subsample=(2, 2),
+                                      border_mode='valid',
+                                      input_shape=(1, None, None))
+    downsample_layer_weight = _gaussian_blur_kernel/256.
+    downsample_layer.W = theano.shared(downsample_layer_weight)
     input = _add_virtual_border(input)
-    _downsample_layer.input = input
-    return _downsample_layer.get_output(train=False)
+    downsample_layer.input = input
+    return downsample_layer.get_output(train=False)
