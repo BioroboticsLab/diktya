@@ -71,7 +71,7 @@ def upsample(input):
     upsample_layer = Convolution2D(1, 5, 5, border_mode='valid',
                                    input_shape=(1, None, None))
     upsample_layer_weight = _gaussian_blur_kernel/64.
-    upsample_layer.W = theano.shared(upsample_layer)
+    upsample_layer.W = theano.shared(upsample_layer_weight)
     shp = input.shape
     upsampled = T.zeros((shp[0], shp[1], 2*shp[2], 2*shp[3]))
     upsampled = T.set_subtensor(upsampled[:, :, ::2, ::2], input)
@@ -85,10 +85,8 @@ def blur(input):
         assert len(input) == 1
         input = input[0]
     with_border = _add_virtual_border(input)
-
     blur_layer = Convolution2D(1, 5, 5, border_mode='valid',
                                 input_shape=(1, None, None))
-
     blur_layer_weight = _gaussian_blur_kernel/256.
     blur_layer.W = theano.shared(blur_layer_weight)
     blur_layer.input = with_border
