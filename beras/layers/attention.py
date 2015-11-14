@@ -17,6 +17,14 @@ from seya.utils import apply_model
 import theano.tensor as T
 
 
+def apply_model(model, X, train=True):
+    tmp = model.layers[0].input
+    model.layers[0].input = X
+    Y = model.get_output(train)
+    model.layers[0].input = tmp
+    return Y
+
+
 class RotationTransformer(SpatialTransformer):
     '''A Spatial Transformer limitted to rotation '''
     def __init__(self, *args, **kwargs):
