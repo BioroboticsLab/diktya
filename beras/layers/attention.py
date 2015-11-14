@@ -14,7 +14,7 @@
 from seya.layers.attention import SpatialTransformer
 from seya.data_utils import floatX
 from seya.utils import apply_model
-import theano.tensor as TT
+import theano.tensor as T
 
 
 class RotationTransformer(SpatialTransformer):
@@ -24,14 +24,14 @@ class RotationTransformer(SpatialTransformer):
 
     def get_output(self, train=False):
         X = self.get_input(train)
-        rot_angle = apply_model(self.locnet, X)
+        rot_angle = apply_model(self.locnet, X, train)
         rot_angle = rot_angle.reshape((X.shape[0], 1))
 
         # set up rotation matrix
-        cos = TT.cos(rot_angle)
-        sin = TT.sin(rot_angle)
-        zeros = TT.zeros_like(rot_angle)
-        theta = TT.concatenate([cos, -sin, zeros, sin, cos, zeros], axis=1).reshape((-1, 2, 3))
+        cos = T.cos(rot_angle)
+        sin = T.sin(rot_angle)
+        zeros = T.zeros_like(rot_angle)
+        theta = T.concatenate([cos, -sin, zeros, sin, cos, zeros], axis=1).reshape((-1, 2, 3))
 
         output = self._transform(theta, X, self.downsample_factor)
         if self.return_theta:
