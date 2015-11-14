@@ -115,7 +115,7 @@ def test_gan_graph():
 
     z_shape = (1, 1, 8, 8)
     gan = GAN(g1, d1, z_shape, num_gen_conditional=1)
-    gan.compile('adam', 'adam', 'FAST_COMPILE')
+    gan.compile('adam', 'adam')
     gan.generate(np.zeros(z_shape))
 
 
@@ -135,5 +135,5 @@ def test_conditional_conv_gan():
     d1.add(Dense(1, activation='sigmoid'))
     z_shape = (1, 1, 8, 8)
     gan = GAN(g1, d1, z_shape, num_gen_conditional=1)
-    gan.compile('adam', 'adam', 'FAST_COMPILE')
+    gan.compile('adam', 'adam')
     gan.generate(np.zeros(z_shape))
