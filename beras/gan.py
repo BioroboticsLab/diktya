@@ -47,7 +47,6 @@ class GAN(AbstractModel):
     def _set_input(model, inputs, labels):
         if type(model) == Sequential:
             if type(inputs) == list or type(inputs) == tuple:
-                print("set input, len: {}".format(len(inputs)))
                 if len(inputs) != 1:
                     input = T.concatenate(inputs, axis=1)
                 else:
