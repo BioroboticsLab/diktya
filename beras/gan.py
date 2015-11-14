@@ -13,11 +13,10 @@
 # limitations under the License.
 from keras.objectives import mse
 from keras.utils.theano_utils import ndim_tensor
-
 import theano
 import theano.tensor.shared_randomstreams as T_random
 import theano.tensor as T
-from theano.sandbox.cuda.basic_ops import  gpu_contiguous
+from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from theano.tensor.nnet import binary_crossentropy as bce
 from keras.models import Sequential, standardize_X, Graph
 from keras import optimizers
@@ -32,7 +31,8 @@ class GAN(AbstractModel):
     ndim = 4
 
     def __init__(self, generator, discremenator,
-                 z_shapes, num_gen_conditional=0, num_dis_conditional=0, num_both_conditional=0):
+                 z_shapes, num_gen_conditional=0, num_dis_conditional=0,
+                 num_both_conditional=0):
         self.num_dis_conditional = num_dis_conditional
         self.G = generator
         self.D = discremenator
@@ -46,10 +46,14 @@ class GAN(AbstractModel):
     @staticmethod
     def _set_input(model, inputs, labels):
         if type(model) == Sequential:
-            if len(inputs) != 1:
-                input = T.concatenate(inputs, axis=1)
+            if type(inputs) == list or type(inputs) == tuple:
+                print("set input, len: {}".format(len(inputs)))
+                if len(inputs) != 1:
+                    input = T.concatenate(inputs, axis=1)
+                else:
+                    input = inputs[0]
             else:
-                input = inputs[0]
+                input = inputs
             model.layers[0].input = input
         elif type(model) == Graph:
             for label, input in zip(labels, inputs):
@@ -115,36 +119,51 @@ class GAN(AbstractModel):
                            for i in range(self.num_dis_conditional)]
 
         g_loss, d_loss, d_loss_real, d_loss_gen = \
-            self.losses(x_real, gen_conditional, dis_conditional, both_conditional)
+            self.losses(x_real, gen_conditional, dis_conditional,
+                        both_conditional)
 
         g_updates = self.optimizer_g.get_updates(
             self.G.params, self.G.constraints, g_loss)
         d_updates = self.optimizer_d.get_updates(
             self.D.params, self.D.constraints, d_loss)
-        self._train = theano.function([x_real] + gen_conditional + dis_conditional + both_conditional,
-            [d_loss, d_loss_real, d_loss_gen, g_loss], updates=d_updates + g_updates,
+        self._train = theano.function(
+            [x_real] + gen_conditional + dis_conditional + both_conditional,
+            [d_loss, d_loss_real, d_loss_gen, g_loss],
+            updates=d_updates + g_updates,
             allow_input_downcast=True, mode=mode)
-        self._generate = theano.function(gen_conditional + dis_conditional + both_conditional,
-                                         [self.g_out],
-                                         allow_input_downcast=True,
-                                         mode=mode)
+        self._generate = theano.function(
+            gen_conditional + dis_conditional + both_conditional,
+            [self.g_out],
+            allow_input_downcast=True,
+            mode=mode)
 
-    def fit(self, X, batch_size=128, nb_epoch=100, verbose=0,
-            callbacks=None,  shuffle=True):
+    def fit(self, X, gen_conditional=None, dis_conditional=None,
+            batch_size=128, nb_epoch=100, verbose=0,
+            callbacks=None, shuffle=True):
         if callbacks is None:
             callbacks = []
+        if gen_conditional is None:
+            gen_conditional = []
+        if dis_conditional is None:
+            dis_conditional = []
         labels = ['d_loss', 'd_real', 'd_gen', 'g_loss']
 
         def train(model, batch_ids, batch_index, batch_logs=None):
             if batch_logs is None:
                 batch_logs = {}
-            outs = self._train(X[batch_ids])
+            b = batch_index*batch_size
+            e = (batch_index+1)*batch_size
+            ins = [X[batch_ids]]
+            for c in gen_conditional + dis_conditional:
+                ins.append(c[batch_ids])
+            outs = self._train(*ins)
             for key, value in zip(labels, outs):
                 batch_logs[key] = value
 
         assert batch_size % 2 == 0, "batch_size must be multiple of two."
         self._fit(train, len(X), batch_size=batch_size, nb_epoch=nb_epoch,
-                  verbose=verbose, callbacks=callbacks, shuffle=shuffle, metrics=labels)
+                  verbose=verbose, callbacks=callbacks, shuffle=shuffle,
+                  metrics=labels)
 
     def print_svg(self):
         theano.printing.pydotprint(self._g_train, outfile="train_g.png")
