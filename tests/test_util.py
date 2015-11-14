@@ -30,8 +30,10 @@ def test_add_border():
     x_with_border = _add_virtual_border(x, filter_size).eval()
     v = x.get_value()
     top = v[:, :, 1:half+1, :]
-    assert (x_with_border[:, :, half:half+64, half:half+64] == v).all()
-    assert (x_with_border[:, :, :half, half:half+64] == top[:, :, ::-1, :]).all()
+    np.testing.assert_allclose(
+        x_with_border[:, :, half:half+64, half:half+64], v)
+    np.testing.assert_allclose(x_with_border[:, :, :half, half:half+64],
+                               top[:, :, ::-1, :])
     if visual_debug:
         plt.subplot(121)
         plt.imshow(x.get_value()[2, 0, :])
