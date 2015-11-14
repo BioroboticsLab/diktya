@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from keras.objectives import mse
 from keras.utils.theano_utils import ndim_tensor
 
 import theano
@@ -75,33 +76,31 @@ class GAN(AbstractModel):
                                     for i in range(len(gen_conditional))])
         return self._get_output(self.G, train)
 
-    def _get_dis_output(self, gen_out, x_real, dis_conditional, train=True):
+    def _get_dis_output(self, fake, real, dis_conditional, train=True):
         dis_conditional = standardize_X(dis_conditional)
-        d_in = T.concatenate([gen_out, x_real])
+        d_in = T.concatenate([fake, real], axis=0)
         self._set_input(self.D, [d_in] + dis_conditional,
                         ["input"] +
                         ["cond_{}".format(i)
                          for i in range(len(dis_conditional))])
         return self._get_output(self.D, train)
 
-    def losses(self, x_real, gen_conditional=[], dis_conditional=[],
+    def losses(self, real, gen_conditional=[], dis_conditional=[],
                both_conditional=[], gen_out=None):
         if gen_out is None:
-            gen_out = gpu_contiguous(self._get_gen_output(gen_conditional +
-                                                          both_conditional))
+            gen_out = self._get_gen_output(gen_conditional + both_conditional)
         self.g_out = gen_out
-        self.d_out = self._get_dis_output(gen_out, x_real,
+        self.d_out = self._get_dis_output(gen_out, real,
                                           dis_conditional + both_conditional)
         batch_size = self.d_out.shape[0]
-        d_out_given_g = self.d_out[:batch_size//2]
-        d_out_given_x = self.d_out[batch_size//2:]
-        clip = lambda x: T.clip(x, 1e-7, 1.0 - 1e-7)
-        d_loss_real = bce(clip(d_out_given_x), T.ones_like(d_out_given_x)).mean()
-        d_loss_gen = bce(clip(d_out_given_g), T.zeros_like(d_out_given_g)).mean()
-        d_loss = d_loss_real + d_loss_gen
+        d_out_given_fake = self.d_out[:batch_size // 2]
+        d_out_given_real = self.d_out[batch_size // 2:]
+        d_loss_fake = mse(d_out_given_fake, T.zeros_like(d_out_given_fake)).mean()
+        d_loss_real = mse(d_out_given_real, T.ones_like(d_out_given_real)).mean()
+        d_loss = d_loss_real + d_loss_fake
 
-        g_loss = bce(clip(d_out_given_g), T.ones_like(d_out_given_g)).mean()
-        return g_loss, d_loss, d_loss_real, d_loss_gen
+        g_loss = mse(d_out_given_fake, T.ones_like(d_out_given_fake)).mean()
+        return g_loss, d_loss, d_loss_real, d_loss_fake
 
     def compile(self, optimizer_g, optimizer_d, mode=None, ndim_gen_out=4):
         self.optimizer_d = optimizers.get(optimizer_d)
