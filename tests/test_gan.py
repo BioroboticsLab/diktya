@@ -21,7 +21,10 @@ from keras.layers.core import Dense, Dropout, MaxoutDense, Flatten
 
 from keras.models import Sequential, Graph
 import math
-from beras.gan import GAN
+
+from keras.optimizers import Adam
+
+from beras.gan import GAN, GANRegularizer, GANL2Regularizer
 import numpy as np
 import matplotlib.pyplot as plt
 from beras.util import LossPrinter
@@ -72,7 +75,7 @@ def test_gan_learn_simle_distribution():
                [0.2,  0.4]]
         return np.random.multivariate_normal(mean, cov, (nb_samples,))
 
-    nb_samples = 60000
+    nb_samples = 600
     # X = sample_multivariate(nb_samples)
     X = sample_circle(nb_samples)
 
@@ -92,12 +95,13 @@ def test_gan_learn_simle_distribution():
     discriminator.add(Dropout(0.5))
     discriminator.add(Dense(1, activation='sigmoid'))
     gan = GAN(generator, discriminator, (batch_size//2, nb_z))
-    gan.compile('adam', 'adam', mode='FAST_RUN', ndim_gen_out=2)
-    gan.fit(X, nb_epoch=1, verbose=0, batch_size=batch_size,
-            callbacks=[LossPrinter(),
-                       # uncomment to generate images
-                       # Plotter(X, "epoches_plot")
-                       ])
+    for r in (GANRegularizer(), GANL2Regularizer()):
+        gan.compile('adam', 'adam', ndim_gen_out=2, gan_regulizer=r)
+        gan.fit(X, nb_epoch=1, verbose=0, batch_size=batch_size,
+                callbacks=[LossPrinter(),
+                           # uncomment to generate images
+                           # Plotter(X, "epoches_plot")
+                           ])
 
 
 def test_gan_graph():

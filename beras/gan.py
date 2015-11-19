@@ -11,20 +11,48 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from keras.objectives import mse
-from keras.utils.theano_utils import ndim_tensor
+import inspect
+
+from keras.objectives import mse, binary_crossentropy
+from keras.optimizers import SGD
+from keras.regularizers import l2
+from keras.utils.theano_utils import ndim_tensor, floatX
 import theano
 import theano.tensor.shared_randomstreams as T_random
 import theano.tensor as T
-from theano.sandbox.cuda.basic_ops import gpu_contiguous
-from theano.tensor.nnet import binary_crossentropy as bce
+import numpy as np
+from theano.ifelse import ifelse
 from keras.models import Sequential, standardize_X, Graph
 from keras import optimizers
-import numpy as np
 from beras.models import AbstractModel
-from beras.util import upsample
 
 _rs = T_random.RandomStreams(1334)
+
+
+class GANRegularizer(object):
+    def get_losses(self, gan, g_loss, d_loss):
+        return g_loss, d_loss
+
+
+class GANL2Regularizer(GANRegularizer):
+    def __init__(self):
+        self.l2_coef = theano.shared(np.cast['float32'](0.), name="l2_rate")
+
+    def _apply_l2_regulizer(self, params, loss):
+        l2_loss = T.zeros_like(loss)
+        for p in params:
+            l2_loss += T.sum(p ** 2) * self.l2_coef
+        return ifelse(T.eq(self.l2_coef, 0.), loss, loss + l2_loss)
+
+    def get_losses(self, gan, g_loss, d_loss):
+        self.l2_coef += ifelse(g_loss > 1.3,
+                               0.00001, 0.)
+        self.l2_coef -= ifelse(g_loss < 0.9,
+                               0.00001, 0.)
+        self.l2_coef = T.maximum(self.l2_coef, 0.)
+
+        d_loss = self._apply_l2_regulizer(gan.D.params, d_loss)
+        return g_loss, d_loss
 
 
 class GAN(AbstractModel):
@@ -39,6 +67,7 @@ class GAN(AbstractModel):
         self.num_gen_conditional = num_gen_conditional
         self.num_both_conditional = num_both_conditional
         self.rs = T_random.RandomStreams(1334)
+
         if type(z_shapes[0]) not in [list, tuple]:
             z_shapes = [z_shapes]
         self.z_shapes = z_shapes
@@ -89,25 +118,32 @@ class GAN(AbstractModel):
         return self._get_output(self.D, train)
 
     def losses(self, real, gen_conditional=[], dis_conditional=[],
-               both_conditional=[], gen_out=None):
+               both_conditional=[], gen_out=None,
+               objective=binary_crossentropy):
         if gen_out is None:
             gen_out = self._get_gen_output(gen_conditional + both_conditional)
+
         self.g_out = gen_out
         self.d_out = self._get_dis_output(gen_out, real,
                                           dis_conditional + both_conditional)
+
         batch_size = self.d_out.shape[0]
         d_out_given_fake = self.d_out[:batch_size // 2]
         d_out_given_real = self.d_out[batch_size // 2:]
-        d_loss_fake = mse(d_out_given_fake, T.zeros_like(d_out_given_fake)).mean()
-        d_loss_real = mse(d_out_given_real, T.ones_like(d_out_given_real)).mean()
+        d_loss_fake = objective(T.zeros_like(d_out_given_fake),
+                                d_out_given_fake).mean()
+        d_loss_real = objective(T.ones_like(d_out_given_real),
+                                d_out_given_real).mean()
         d_loss = d_loss_real + d_loss_fake
-
-        g_loss = mse(d_out_given_fake, T.ones_like(d_out_given_fake)).mean()
+        g_loss = objective(T.ones_like(d_out_given_fake),
+                           d_out_given_fake).mean()
         return g_loss, d_loss, d_loss_real, d_loss_fake
 
-    def compile(self, optimizer_g, optimizer_d, mode=None, ndim_gen_out=4):
-        self.optimizer_d = optimizers.get(optimizer_d)
-        self.optimizer_g = optimizers.get(optimizer_g)
+    def compile(self, optimizer_g, optimizer_d, gan_regulizer=None, mode=None, ndim_gen_out=4):
+        optimizer_d = optimizers.get(optimizer_d)
+        optimizer_g = optimizers.get(optimizer_g)
+        if gan_regulizer is None:
+            gan_regulizer = GANRegularizer()
 
         x_real = ndim_tensor(ndim_gen_out)
         gen_conditional = [T.tensor4("gen_conditional_{}".format(i))
@@ -121,9 +157,11 @@ class GAN(AbstractModel):
             self.losses(x_real, gen_conditional, dis_conditional,
                         both_conditional)
 
-        g_updates = self.optimizer_g.get_updates(
+        g_loss, d_loss = gan_regulizer.get_losses(self, g_loss, d_loss)
+
+        g_updates = optimizer_g.get_updates(
             self.G.params, self.G.constraints, g_loss)
-        d_updates = self.optimizer_d.get_updates(
+        d_updates = optimizer_d.get_updates(
             self.D.params, self.D.constraints, d_loss)
         self._train = theano.function(
             [x_real] + gen_conditional + dis_conditional + both_conditional,
