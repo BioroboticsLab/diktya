@@ -18,6 +18,7 @@ from keras.layers.convolutional import Convolution2D
 import numpy as np
 import theano
 import theano.tensor as T
+from keras.layers.core import Layer
 from scipy.misc import imsave
 
 
@@ -93,7 +94,25 @@ def blur(input):
     return blur_layer.get_output(train=False)
 
 
+class BorderReflect(Layer):
+    def __init__(self, filter_size=5, **kwargs):
+        super().__init__(**kwargs)
+        self.filter_size = filter_size
+
+    def get_output(self, train=False):
+        return _add_virtual_border(self.get_input(train), self.filter_size)
+
+    @property
+    def output_shape(self):
+        shp = self.input_shape
+        f = self.filter_size
+        return shp[:2] + (shp[2] + f - 1, shp[3] + f - 1)
+
+
 def _add_virtual_border(input, filter_size=5):
+    """Reflects the border like OpenCV BORDER_REFLECT_101. See here
+    http://docs.opencv.org/2.4/modules/imgproc/doc/filtering.html"""
+
     shp = input.shape
     assert filter_size % 2 == 1, "only works with odd filters"
     half = (filter_size - 1) // 2
