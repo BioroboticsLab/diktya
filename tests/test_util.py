@@ -11,12 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from colorsys import hsv_to_rgb
+
 import scipy
 import skimage
 import skimage.transform
 import theano
 import numpy as np
-from beras.util import _add_virtual_border, downsample, upsample
+from beras.util import _add_virtual_border, downsample, upsample, join
 import matplotlib.pyplot as plt
 
 
@@ -66,3 +68,27 @@ def test_upsample():
         plt.imshow(x_up[0, 0, :])
         plt.show()
 
+
+def test_tile():
+    n = 16
+    images = []
+
+    height, width = 16, 16
+    for i in range(n):
+        color = hsv_to_rgb(i/n, 1, 1)
+        image = np.zeros((3, 16, 16))
+        for c in range(len(color)):
+            image[c] = color[c]
+        images.append(image)
+
+    tiled = join(images)
+
+    for r in range(4):
+        for c in range(4):
+            ri = r*height
+            ci = c*width
+            np.testing.assert_allclose(tiled[:, ri:ri+height, ci:ci+height], images[4*r + c])
+
+    if visual_debug:
+        plt.imshow(tiled.transpose((1, 2, 0)))
+        plt.show()

@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+from math import ceil
+from math import sqrt
+
 import keras
 from keras.callbacks import Callback
 from keras.layers.convolutional import Convolution2D
@@ -155,3 +158,31 @@ def downsample(input):
     input = _add_virtual_border(input)
     downsample_layer.input = input
     return downsample_layer.get_output(train=False)
+
+
+def tile(tiles):
+    def calc_columns_rows(n):
+        num_columns = int(ceil(sqrt(n)))
+        num_rows = int(ceil(n / float(num_columns)))
+        return num_columns, num_rows
+
+
+    cols, rows = calc_columns_rows(len(tiles))
+    tile_size = tiles[0].shape
+
+    if len(tile_size) == 2:
+        tile_height, tile_width = tile_size
+        combined_size = (1, tile_height * rows, tile_width * cols)
+    elif len(tile_size) == 3:
+        tile_height, tile_width = tile_size[1:]
+        combined_size = (tile_size[0], tile_height * rows, tile_width * cols)
+    else:
+        raise ValueError("Only 2 or 3 dim input size are supported, got: {}"
+                         .format(tile_size))
+    im = np.zeros(combined_size)
+    for r in range(rows):
+        for c in range(cols):
+            ir = r*tile_height
+            ic = c*tile_width
+            im[:, ir:ir+tile_height, ic:ic+tile_width] = tiles[r*rows + c]
+    return im
