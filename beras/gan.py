@@ -25,6 +25,8 @@ import numpy as np
 from theano.ifelse import ifelse
 from keras.models import Sequential, standardize_X, Graph
 from keras import optimizers
+from theano.tensor.type import TensorType
+
 from beras.models import AbstractModel
 
 _rs = T_random.RandomStreams(1334)
@@ -106,10 +108,10 @@ class GAN(AbstractModel):
         gen_conditional = standardize_X(gen_conditional)
         self.zs = [self.rs.uniform(z, -1, 1) for z in self.z_shapes]
         self.z_labels = ["z_{}".format(i) for i in range(len(self.z_shapes))]
-        if len(z_labels) == 1:
-            z_labels = ["z"]
+        if len(self.z_labels) == 1:
+            self.z_labels = ["z"]
         self._set_input(self.G, self.zs + gen_conditional,
-                        z_labels + ["cond_{}".format(i)
+                        self.z_labels + ["cond_{}".format(i)
                                     for i in range(len(gen_conditional))])
         return self._get_output(self.G, train)
 
@@ -144,9 +146,7 @@ class GAN(AbstractModel):
                            d_out_given_fake).mean()
         return g_loss, d_loss, d_loss_real, d_loss_fake
 
-    def compile(self, optimizer_g, optimizer_d, gan_regulizer=None, mode=None, ndim_gen_out=4):
-        optimizer_d = optimizers.get(optimizer_d)
-        optimizer_g = optimizers.get(optimizer_g)
+    def build(self, optimizer_g=None, optimizer_d=None, gan_regulizer=None, mode=None, ndim_gen_out=4):
         if gan_regulizer is None:
             gan_regulizer = GAN.Regularizer()
         elif gan_regulizer == 'l2':
@@ -163,28 +163,41 @@ class GAN(AbstractModel):
         g_loss, d_loss, d_loss_real, d_loss_gen = \
             self.losses(x_real, gen_conditional, dis_conditional,
                         both_conditional)
-
+        g_out = self.g_out
         g_loss, d_loss, reg_updates = gan_regulizer.get_losses(self, g_loss, d_loss)
 
-        g_updates = optimizer_g.get_updates(
-            self.G.params, self.G.constraints, g_loss)
-        d_updates = optimizer_d.get_updates(
-            self.D.params, self.D.constraints, d_loss)
+        if optimizer_d and optimizer_g:
+            optimizer_g = optimizers.get(optimizer_g)
+            optimizer_d = optimizers.get(optimizer_d)
+            g_updates = optimizer_g.get_updates(
+                self.G.params, self.G.constraints, g_loss)
+            d_updates = optimizer_d.get_updates(
+                self.D.params, self.D.constraints, d_loss)
+
+        self.vars = DotMap(locals())
+
+    def compile(self, optimizer_g, optimizer_d, gan_regulizer=None, mode=None, ndim_gen_out=4):
+        if not hasattr(self, 'vars'):
+            self.build(optimizer_g, optimizer_d, gan_regulizer, mode, ndim_gen_out)
+        v = self.vars
         self._train = theano.function(
-            [x_real] + gen_conditional + dis_conditional + both_conditional,
-            [d_loss, d_loss_real, d_loss_gen, g_loss],
-            updates=d_updates + g_updates + reg_updates,
+            [v.x_real] + v.gen_conditional + v.dis_conditional + v.both_conditional,
+            [v.d_loss, v.d_loss_real, v.d_loss_gen, v.g_loss],
+            updates=v.d_updates + v.g_updates + v.reg_updates,
             allow_input_downcast=True, mode=mode)
         self._generate = theano.function(
-            gen_conditional + dis_conditional + both_conditional,
+            v.gen_conditional + v.dis_conditional + v.both_conditional,
             [self.g_out],
             allow_input_downcast=True,
             mode=mode)
-        zs = [ndim_tensor(len(z_shp)) for z_shp in self.z_shapes]
+
+        zs = [TensorType('float32', z.broadcastable)() for z in self.zs]
+        replace_zs = list(zip(self.zs, zs))
         self._debug = theano.function(
-            [x_real] + zs + gen_conditional + dis_conditional + both_conditional,
-            [self.g_out, x_real, d_loss, d_loss_real, d_loss_gen, g_loss],
-            allow_input_downcast=True, mode=mode, givens=[(self.zs, zs)])
+            [v.x_real] + zs + v.gen_conditional + v.dis_conditional + v.both_conditional,
+            [v.g_out, v.x_real, v.d_loss, v.d_loss_real, v.d_loss_gen, v.g_loss],
+            allow_input_downcast=True, mode=mode, givens=replace_zs)
+
 
     def fit(self, X, gen_conditional=None, dis_conditional=None,
             batch_size=128, nb_epoch=100, verbose=0,
