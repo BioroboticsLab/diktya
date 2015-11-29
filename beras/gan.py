@@ -13,6 +13,7 @@
 # limitations under the License.
 import inspect
 
+from dotmap import DotMap
 from keras.objectives import mse, binary_crossentropy
 from keras.optimizers import SGD
 from keras.regularizers import l2
@@ -29,34 +30,37 @@ from beras.models import AbstractModel
 _rs = T_random.RandomStreams(1334)
 
 
-class GANRegularizer(object):
-    def get_losses(self, gan, g_loss, d_loss):
-        return g_loss, d_loss
-
-
-class GANL2Regularizer(GANRegularizer):
-    def __init__(self):
-        self.l2_coef = theano.shared(np.cast['float32'](0.), name="l2_rate")
-
-    def _apply_l2_regulizer(self, params, loss):
-        l2_loss = T.zeros_like(loss)
-        for p in params:
-            l2_loss += T.sum(p ** 2) * self.l2_coef
-        return ifelse(T.eq(self.l2_coef, 0.), loss, loss + l2_loss)
-
-    def get_losses(self, gan, g_loss, d_loss):
-        self.l2_coef += ifelse(g_loss > 1.3,
-                               0.00001, 0.)
-        self.l2_coef -= ifelse(g_loss < 0.9,
-                               0.00001, 0.)
-        self.l2_coef = T.maximum(self.l2_coef, 0.)
-
-        d_loss = self._apply_l2_regulizer(gan.D.params, d_loss)
-        return g_loss, d_loss
-
-
 class GAN(AbstractModel):
     ndim = 4
+
+    class Regularizer(object):
+        def get_losses(self, gan, g_loss, d_loss):
+            return g_loss, d_loss
+
+    class L2Regularizer(Regularizer):
+        def __init__(self, low=0.9, high=1.3):
+            self.l2_coef = theano.shared(np.cast['float32'](0.), name="l2_rate")
+            self.low = low
+            self.high = high
+
+        def _apply_l2_regulizer(self, params, loss):
+            l2_loss = T.zeros_like(loss)
+            for p in params:
+                l2_loss += T.sum(p ** 2) * self.l2_coef
+            return loss + l2_loss
+
+        def get_losses(self, gan, g_loss, d_loss):
+            delta = 0.00001
+            delta_l2 = ifelse(g_loss > self.high,
+                            delta,
+                            ifelse(g_loss < self.low,
+                                   -delta,
+                                   0.))
+
+            new_l2 = T.maximum(self.l2_coef + delta_l2, 0.)
+            updates = {self.l2_coef: new_l2}
+            d_loss = self._apply_l2_regulizer(gan.D.params, d_loss)
+            return g_loss, d_loss, updates
 
     def __init__(self, generator, discremenator,
                  z_shapes, num_gen_conditional=0, num_dis_conditional=0,
@@ -143,7 +147,9 @@ class GAN(AbstractModel):
         optimizer_d = optimizers.get(optimizer_d)
         optimizer_g = optimizers.get(optimizer_g)
         if gan_regulizer is None:
-            gan_regulizer = GANRegularizer()
+            gan_regulizer = GAN.Regularizer()
+        elif gan_regulizer == 'l2':
+            gan_regulizer = GAN.L2Regularizer()
 
         x_real = ndim_tensor(ndim_gen_out)
         gen_conditional = [T.tensor4("gen_conditional_{}".format(i))
@@ -157,7 +163,7 @@ class GAN(AbstractModel):
             self.losses(x_real, gen_conditional, dis_conditional,
                         both_conditional)
 
-        g_loss, d_loss = gan_regulizer.get_losses(self, g_loss, d_loss)
+        g_loss, d_loss, reg_updates = gan_regulizer.get_losses(self, g_loss, d_loss)
 
         g_updates = optimizer_g.get_updates(
             self.G.params, self.G.constraints, g_loss)
@@ -166,7 +172,7 @@ class GAN(AbstractModel):
         self._train = theano.function(
             [x_real] + gen_conditional + dis_conditional + both_conditional,
             [d_loss, d_loss_real, d_loss_gen, g_loss],
-            updates=d_updates + g_updates,
+            updates=d_updates + g_updates + reg_updates,
             allow_input_downcast=True, mode=mode)
         self._generate = theano.function(
             gen_conditional + dis_conditional + both_conditional,

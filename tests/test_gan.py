@@ -14,6 +14,8 @@
 
 import os
 import keras
+import theano
+from dotmap import DotMap
 from keras.callbacks import ModelCheckpoint
 import keras.initializations
 from keras.layers.convolutional import Convolution2D, UpSample2D, MaxPooling2D
@@ -24,7 +26,8 @@ import math
 
 from keras.optimizers import Adam
 
-from beras.gan import GAN, GANRegularizer, GANL2Regularizer
+
+from beras.gan import GAN
 import numpy as np
 import matplotlib.pyplot as plt
 from beras.util import LossPrinter
@@ -95,7 +98,7 @@ def test_gan_learn_simle_distribution():
     discriminator.add(Dropout(0.5))
     discriminator.add(Dense(1, activation='sigmoid'))
     gan = GAN(generator, discriminator, (batch_size//2, nb_z))
-    for r in (GANRegularizer(), GANL2Regularizer()):
+    for r in (GAN.Regularizer(), GAN.L2Regularizer()):
         gan.compile('adam', 'adam', ndim_gen_out=2, gan_regulizer=r)
         gan.fit(X, nb_epoch=1, verbose=0, batch_size=batch_size,
                 callbacks=[LossPrinter(),
@@ -121,6 +124,23 @@ def test_gan_graph():
     gan = GAN(g1, d1, z_shape, num_gen_conditional=1)
     gan.compile('adam', 'adam')
     gan.generate(np.zeros(z_shape))
+
+
+def test_gan_l2_regularizer():
+    reg = GAN.L2Regularizer()
+    assert reg.l2_coef.get_value() == 0.
+    g_loss = theano.shared(np.cast['float32'](reg.high + 2))
+    d_loss = theano.shared(np.cast['float32'](0.))
+    gan = DotMap()
+    gan.D.params = [theano.shared(np.cast['float32'](1.))]
+    reg_g_loss, reg_d_loss, updates = reg.get_losses(gan, g_loss, d_loss)
+    fn = theano.function([], [reg_g_loss, reg_d_loss], updates=updates)
+    fn()
+    assert reg.l2_coef.get_value() > 0.
+    g_loss.set_value(np.cast['float32'](reg.low - 0.1))
+    fn()
+    fn()
+    assert reg.l2_coef.get_value() == 0.
 
 
 def test_conditional_conv_gan():
