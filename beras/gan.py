@@ -35,7 +35,8 @@ class GAN(AbstractModel):
 
     class Regularizer(object):
         def get_losses(self, gan, g_loss, d_loss):
-            return g_loss, d_loss
+            updates = []
+            return g_loss, d_loss, updates
 
     class L2Regularizer(Regularizer):
         def __init__(self, low=0.9, high=1.3):
@@ -58,7 +59,7 @@ class GAN(AbstractModel):
                                    0.))
 
             new_l2 = T.maximum(self.l2_coef + delta_l2, 0.)
-            updates = {self.l2_coef: new_l2}
+            updates = [(self.l2_coef, new_l2)]
             d_loss = self._apply_l2_regulizer(gan.D.params, d_loss)
             return g_loss, d_loss, updates
 
