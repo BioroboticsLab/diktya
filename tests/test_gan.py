@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from . import visual_debug
+from . import visual_debug, TEST_OUTPUT_DIR
 import os
 import keras
 import theano
@@ -101,7 +101,7 @@ def test_gan_learn_simle_distribution():
         gan.compile('adam', 'adam', ndim_gen_out=2, gan_regulizer=r)
         callbacks = [LossPrinter()]
         if visual_debug:
-            callbacks.append(Plotter(X, "epoches_plot"))
+            callbacks.append(Plotter(X, TEST_OUTPUT_DIR + "/epoches_plot"))
         gan.fit(X, nb_epoch=1, verbose=0, batch_size=batch_size,
                 callbacks=callbacks)
 

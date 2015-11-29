@@ -11,9 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 
 visual_debug = False
 
 import matplotlib
 
 matplotlib.use('Agg')
+
+TEST_OUTPUT_DIR = "tests_out"
+os.makedirs(TEST_OUTPUT_DIR, exist_ok=True)

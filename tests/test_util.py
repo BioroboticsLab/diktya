@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import random
-from . import visual_debug
+from . import visual_debug, TEST_OUTPUT_DIR
 from colorsys import hsv_to_rgb
 import scipy
 import skimage
@@ -94,7 +94,7 @@ def test_tile():
 
     fig = plt.figure()
     plt.imshow(tiled.transpose((1, 2, 0)))
-    plt.savefig("test_tile.png")
+    plt.savefig(TEST_OUTPUT_DIR + "/test_tile.png")
     if visual_debug:
         plt.show()
     plt.close(fig)
