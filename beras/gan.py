@@ -198,8 +198,6 @@ class GAN(AbstractModel):
         def train(model, batch_ids, batch_index, batch_logs=None):
             if batch_logs is None:
                 batch_logs = {}
-            b = batch_index*batch_size
-            e = (batch_index+1)*batch_size
             ins = [X[batch_ids]]
             for c in gen_conditional + dis_conditional:
                 ins.append(c[batch_ids])
