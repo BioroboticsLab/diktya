@@ -51,12 +51,12 @@ class GAN(AbstractModel):
             return loss + l2_loss
 
         def get_losses(self, gan, g_loss, d_loss):
-            delta = 0.00001
+            delta = np.cast['float32'](0.00001)
             delta_l2 = ifelse(g_loss > self.high,
                             delta,
                             ifelse(g_loss < self.low,
                                    -delta,
-                                   0.))
+                                   np.cast['float32'](0.)))
 
             new_l2 = T.maximum(self.l2_coef + delta_l2, 0.)
             updates = [(self.l2_coef, new_l2)]
