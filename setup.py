@@ -12,7 +12,8 @@ setup(name='beras',
             "keras==0.2.0",
             "pytest>=2.7.2",
             "scikit-image>=0.11.3",
-            "seya"
+            "seya",
+            "dotmap>=1.1.2"
       ],
       packages=['beras',
                 'beras.layers']
