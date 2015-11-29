@@ -104,11 +104,11 @@ class GAN(AbstractModel):
 
     def _get_gen_output(self, gen_conditional, train=True):
         gen_conditional = standardize_X(gen_conditional)
-        zs = [self.rs.uniform(z, -1, 1) for z in self.z_shapes]
-        z_labels = ["z_{}".format(i) for i in range(len(self.z_shapes))]
+        self.zs = [self.rs.uniform(z, -1, 1) for z in self.z_shapes]
+        self.z_labels = ["z_{}".format(i) for i in range(len(self.z_shapes))]
         if len(z_labels) == 1:
             z_labels = ["z"]
-        self._set_input(self.G, zs + gen_conditional,
+        self._set_input(self.G, self.zs + gen_conditional,
                         z_labels + ["cond_{}".format(i)
                                     for i in range(len(gen_conditional))])
         return self._get_output(self.G, train)
@@ -180,10 +180,11 @@ class GAN(AbstractModel):
             [self.g_out],
             allow_input_downcast=True,
             mode=mode)
+        zs = [ndim_tensor(len(z_shp)) for z_shp in self.z_shapes]
         self._debug = theano.function(
-            [x_real] + gen_conditional + dis_conditional + both_conditional,
+            [x_real] + zs + gen_conditional + dis_conditional + both_conditional,
             [self.g_out, x_real, d_loss, d_loss_real, d_loss_gen, g_loss],
-            allow_input_downcast=True, mode=mode)
+            allow_input_downcast=True, mode=mode, givens=[(self.zs, zs)])
 
     def fit(self, X, gen_conditional=None, dis_conditional=None,
             batch_size=128, nb_epoch=100, verbose=0,
@@ -234,6 +235,16 @@ class GAN(AbstractModel):
         ins = zs + conditionals
         outs = self._generate(ins)
         return DotMap(zip(labels, outs))
+
+    def interpolate(self, x, y):
+        assert len(self.z_shapes) == 1
+        z = np.zeros(self.z_shapes[0])
+        n = len(z)
+        for i in range(n):
+            z[i] = x + i/n * (y - x)
+        real = np.zeros_like(z)
+        outs = self.debug(real, zs=[z])
+        return outs.fake
 
     def train_batch(self, X, ZD, ZG, k=1):
         for i in range(k):
