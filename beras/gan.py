@@ -226,9 +226,13 @@ class GAN(AbstractModel):
     def generate(self, *conditional):
         return self._generate(*conditional)[0]
 
-    def debug(self, X, *conditional):
+    def debug(self, X, zs=None, *conditionals):
+        if zs is None:
+            zs = [np.random.uniform(-1, 1, z_shp) for z_shp in self.z_shapes]
+
         labels = ['fake', 'real', 'd_loss', 'd_real', 'd_gen', 'g_loss']
-        outs = self._generate(*conditional)
+        ins = zs + conditionals
+        outs = self._generate(ins)
         return DotMap(zip(labels, outs))
 
     def train_batch(self, X, ZD, ZG, k=1):
