@@ -179,6 +179,10 @@ class GAN(AbstractModel):
             [self.g_out],
             allow_input_downcast=True,
             mode=mode)
+        self._debug = theano.function(
+            [x_real] + gen_conditional + dis_conditional + both_conditional,
+            [self.g_out, x_real, d_loss, d_loss_real, d_loss_gen, g_loss],
+            allow_input_downcast=True, mode=mode)
 
     def fit(self, X, gen_conditional=None, dis_conditional=None,
             batch_size=128, nb_epoch=100, verbose=0,
@@ -222,6 +226,11 @@ class GAN(AbstractModel):
 
     def generate(self, *conditional):
         return self._generate(*conditional)[0]
+
+    def debug(self, X, *conditional):
+        labels = ['fake', 'real', 'd_loss', 'd_real', 'd_gen', 'g_loss']
+        outs = self._generate(*conditional)
+        return DotMap(zip(labels, outs))
 
     def train_batch(self, X, ZD, ZG, k=1):
         for i in range(k):
