@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from . import visual_debug
 from colorsys import hsv_to_rgb
 
 import scipy
@@ -20,9 +21,6 @@ import theano
 import numpy as np
 from beras.util import _add_virtual_border, downsample, upsample, join
 import matplotlib.pyplot as plt
-
-
-visual_debug = False
 
 
 def test_add_border():

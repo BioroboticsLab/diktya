@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from . import visual_debug
 import os
 import keras
 import theano
@@ -24,12 +25,9 @@ from keras.layers.core import Dense, Dropout, MaxoutDense, Flatten
 from keras.models import Sequential, Graph
 import math
 
-from keras.optimizers import Adam
-
 
 from beras.gan import GAN
 import numpy as np
-import matplotlib.pyplot as plt
 from beras.util import LossPrinter
 
 
@@ -58,6 +56,7 @@ class Plotter(keras.callbacks.Callback):
         self._plot("on_end_{}.png".format(epoch))
 
     def _plot(self, outname):
+        import matplotlib.pyplot as plt
         ys = []
         for i in range(32):
             ys.append(self.model.generate())
@@ -100,11 +99,11 @@ def test_gan_learn_simle_distribution():
     gan = GAN(generator, discriminator, (batch_size//2, nb_z))
     for r in (GAN.Regularizer(), GAN.L2Regularizer()):
         gan.compile('adam', 'adam', ndim_gen_out=2, gan_regulizer=r)
+        callbacks = [LossPrinter()]
+        if visual_debug:
+            callbacks.append(Plotter(X, "epoches_plot"))
         gan.fit(X, nb_epoch=1, verbose=0, batch_size=batch_size,
-                callbacks=[LossPrinter(),
-                           # uncomment to generate images
-                           # Plotter(X, "epoches_plot")
-                           ])
+                callbacks=callbacks)
 
 
 def test_gan_graph():
