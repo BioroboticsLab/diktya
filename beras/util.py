@@ -166,7 +166,6 @@ def tile(tiles):
         num_rows = int(ceil(n / float(num_columns)))
         return num_columns, num_rows
 
-
     cols, rows = calc_columns_rows(len(tiles))
     tile_size = tiles[0].shape
 
@@ -182,7 +181,9 @@ def tile(tiles):
     im = np.zeros(combined_size)
     for r in range(rows):
         for c in range(cols):
-            ir = r*tile_height
-            ic = c*tile_width
-            im[:, ir:ir+tile_height, ic:ic+tile_width] = tiles[r*rows + c]
+            tile_idx = r*cols + c
+            if tile_idx < len(tiles):
+                ir = r*tile_height
+                ic = c*tile_width
+                im[:, ir:ir+tile_height, ic:ic+tile_width] = tiles[tile_idx]
     return im

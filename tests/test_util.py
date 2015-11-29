@@ -11,15 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import random
 from . import visual_debug
 from colorsys import hsv_to_rgb
-
 import scipy
 import skimage
 import skimage.transform
 import theano
 import numpy as np
-from beras.util import _add_virtual_border, downsample, upsample, join
+from beras.util import _add_virtual_border, downsample, upsample, tile
 import matplotlib.pyplot as plt
 
 
@@ -68,25 +68,33 @@ def test_upsample():
 
 
 def test_tile():
-    n = 16
+    n = 128
     images = []
 
     height, width = 16, 16
     for i in range(n):
-        color = hsv_to_rgb(i/n, 1, 1)
+        color = hsv_to_rgb(random.random(), 1, 1)
         image = np.zeros((3, 16, 16))
         for c in range(len(color)):
             image[c] = color[c]
         images.append(image)
 
-    tiled = join(images)
+    tiled = tile(images)
 
-    for r in range(4):
-        for c in range(4):
+    rows = tiled.shape[1] // height
+    cols = tiled.shape[2] // width
+    for r in range(rows):
+        for c in range(cols):
+            idx = cols*r + c
             ri = r*height
             ci = c*width
-            np.testing.assert_allclose(tiled[:, ri:ri+height, ci:ci+height], images[4*r + c])
+            subimage = tiled[:, ri:ri+height, ci:ci+height]
+            if idx < len(images):
+                np.testing.assert_allclose(subimage, images[idx])
 
+    fig = plt.figure()
+    plt.imshow(tiled.transpose((1, 2, 0)))
+    plt.savefig("test_tile.png")
     if visual_debug:
-        plt.imshow(tiled.transpose((1, 2, 0)))
         plt.show()
+    plt.close(fig)
