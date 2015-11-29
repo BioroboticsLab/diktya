@@ -191,7 +191,7 @@ class GAN(AbstractModel):
             allow_input_downcast=True,
             mode=mode)
 
-        zs = [TensorType('float32', z.broadcastable)() for z in self.zs]
+        zs = [TensorType(z.dtype, z.broadcastable)() for z in self.zs]
         replace_zs = list(zip(self.zs, zs))
         self._debug = theano.function(
             [v.x_real] + zs + v.gen_conditional + v.dis_conditional + v.both_conditional,
