@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import tempfile
 
 from . import visual_debug, TEST_OUTPUT_DIR
 import os
@@ -24,6 +25,7 @@ from keras.layers.core import Dense, Dropout, MaxoutDense, Flatten
 
 from keras.models import Sequential, Graph
 import math
+import pytest
 
 
 from beras.gan import GAN
@@ -70,7 +72,25 @@ class Plotter(keras.callbacks.Callback):
         plt.close()
 
 
-def test_gan_learn_simle_distribution():
+simple_gan_batch_size = 64
+simple_gan_nb_z = 20
+simple_gan_nb_out = 2
+
+@pytest.fixture()
+def simple_gan():
+    generator = Sequential()
+    generator.add(Dense(simple_gan_nb_z, activation='relu',
+                        input_dim=simple_gan_nb_z))
+    generator.add(Dense(simple_gan_nb_z, activation='relu'))
+    generator.add(Dense(simple_gan_nb_out, activation='sigmoid'))
+
+    discriminator = Sequential()
+    discriminator.add(Dense(20, activation='relu', input_dim=2))
+    discriminator.add(Dense(1, activation='sigmoid'))
+    return GAN(generator, discriminator, (simple_gan_batch_size, simple_gan_nb_z))
+
+
+def test_gan_learn_simle_distribution(simple_gan):
     def sample_multivariate(nb_samples):
         mean = (0.2, 0)
         cov = [[0.5,  0.1],
@@ -81,29 +101,24 @@ def test_gan_learn_simle_distribution():
     # X = sample_multivariate(nb_samples)
     X = sample_circle(nb_samples)
 
-    nb_z = 20
-    batch_size = 128
-    generator = Sequential()
-    generator.add(Dense(nb_z, activation='relu', input_dim=nb_z))
-    generator.add(Dropout(0.5))
-    generator.add(Dense(nb_z, activation='relu'))
-    generator.add(Dropout(0.5))
-    generator.add(Dense(2))
-
-    discriminator = Sequential()
-    discriminator.add(MaxoutDense(20, nb_feature=5, input_dim=2))
-    discriminator.add(Dropout(0.5))
-    discriminator.add(MaxoutDense(20, nb_feature=5))
-    discriminator.add(Dropout(0.5))
-    discriminator.add(Dense(1, activation='sigmoid'))
-    gan = GAN(generator, discriminator, (batch_size//2, nb_z))
     for r in (GAN.Regularizer(), GAN.L2Regularizer()):
-        gan.compile('adam', 'adam', ndim_gen_out=2, gan_regulizer=r)
+        simple_gan.compile('adam', 'adam', ndim_gen_out=2, gan_regulizer=r)
         callbacks = [LossPrinter()]
         if visual_debug:
             callbacks.append(Plotter(X, TEST_OUTPUT_DIR + "/epoches_plot"))
-        gan.fit(X, nb_epoch=1, verbose=0, batch_size=batch_size,
-                callbacks=callbacks)
+        simple_gan.fit(X, nb_epoch=1, verbose=0, batch_size=simple_gan_batch_size, callbacks=callbacks)
+
+
+def test_gan_save_load(simple_gan):
+    directory = tempfile.mkdtemp()
+    simple_gan.save(directory)
+    loaded_gan = GAN.load(directory)
+    for s, l in zip(simple_gan.z_shapes, loaded_gan.z_shapes):
+        assert tuple(s) == tuple(l)
+
+    for ps, pl in zip(simple_gan.G.params + simple_gan.D.params,
+                      loaded_gan.G.params + loaded_gan.D.params):
+        np.testing.assert_allclose(pl.get_value(), ps.get_value())
 
 
 def test_gan_graph():

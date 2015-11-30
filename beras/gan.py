@@ -12,18 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import inspect
+import json
+import os
 
 from dotmap import DotMap
 from keras.objectives import mse, binary_crossentropy
-from keras.optimizers import SGD
-from keras.regularizers import l2
 from keras.utils.theano_utils import ndim_tensor, floatX
 import theano
 import theano.tensor.shared_randomstreams as T_random
 import theano.tensor as T
 import numpy as np
 from theano.ifelse import ifelse
-from keras.models import Sequential, standardize_X, Graph
+from keras.models import Sequential, standardize_X, Graph, model_from_json, \
+    model_from_config
 from keras import optimizers
 from theano.tensor.type import TensorType
 
@@ -236,6 +237,46 @@ class GAN(AbstractModel):
     def save_weights(self, fname, overwrite=False):
         self.G.save_weights(fname.format("generator"), overwrite)
         self.D.save_weights(fname.format("detector"), overwrite)
+
+    @staticmethod
+    def _weight_fname_tmpl(directory):
+        return os.path.join(directory, "{}.hdf5")
+
+    @staticmethod
+    def load(directory):
+        with open(directory + "/gan.json") as f:
+            config = json.load(f)
+            gan = GAN.load_from_config(config)
+        gan.load_weights(GAN._weight_fname_tmpl(directory))
+        return gan
+
+    @staticmethod
+    def load_from_config(config):
+        G = model_from_config(config['G'])
+        D = model_from_config(config['D'])
+        return GAN(G, D,
+                   config['z_shapes'],
+                   config['num_gen_conditional'],
+                   config['num_dis_conditional'],
+                   config['num_both_conditional'])
+
+    def get_config(self, verbose=0):
+        g_config = self.G.get_config(verbose)
+        d_config = self.D.get_config(verbose)
+        return {
+            'G': g_config,
+            'D': d_config,
+            'z_shapes': self.z_shapes,
+            'num_gen_conditional': self.num_gen_conditional,
+            'num_dis_conditional': self.num_dis_conditional,
+            'num_both_conditional': self.num_both_conditional,
+        }
+
+    def save(self, directory, overwrite=False):
+        os.makedirs(directory, exist_ok=True)
+        with open(directory + "/gan.json", "w") as f:
+            json.dump(self.get_config(), f)
+        self.save_weights(self._weight_fname_tmpl(directory), overwrite)
 
     def generate(self, *conditional):
         return self._generate(*conditional)[0]
