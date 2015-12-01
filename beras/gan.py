@@ -247,7 +247,8 @@ class GAN(AbstractModel):
     def _uniform_z(self):
         return np.random.uniform(-1, 1, self.z_shape)
 
-    def optimize_image(self, expected_image, nb_iterations, z_start=None, callbacks=None, verbose=0):
+    def optimize_image(self, expected_image, nb_iterations, z_start=None,
+                       callbacks=None, verbose=0, conditionals=[]):
         if z_start is None:
             z_start = self._uniform_z()
 
@@ -261,7 +262,9 @@ class GAN(AbstractModel):
         def optimize(model, batch_ids, batch_index, batch_logs=None):
             if batch_logs is None:
                 batch_logs = {}
-            outs = self._optimize_image_fn(expected_image)
+
+            ins = [expected_image] + conditionals
+            outs = self._optimize_image_fn(*ins)
             for key, value in zip(labels, outs):
                 batch_logs[key] = value
 
