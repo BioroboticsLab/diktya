@@ -375,6 +375,27 @@ class GAN(AbstractModel):
         outs = self.debug(real, z)
         return outs.fake
 
+    def random_z_point(self):
+        """returns a random point in the z space"""
+        shp = self.z_shape[1:]
+        return np.random.uniform(-1, 1, shp)
+
+    def neighborhood(self, z_point=None, std=0.25):
+        """samples the neighborhood of a z_point by adding gaussian noise
+         to it. You can control the standard derivation of the noise with std."""
+        shp = self.z_shape[1:]
+        if z_point is None:
+            z_point = np.random.uniform(-1, 1, shp)
+        n = self.z_shape[0]
+        z = np.zeros(self.z_shape)
+        for i in range(n):
+            offset = np.random.normal(0, std, shp)
+            z[i] = np.clip(z_point + offset, -1, 1)
+
+        real = np.zeros(self.g_output_shape())
+        outs = self.debug(real, z)
+        return outs.fake
+
     def train_batch(self, X, ZD, ZG, k=1):
         for i in range(k):
             self._d_train([X, ZD])

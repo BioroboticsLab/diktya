@@ -137,7 +137,7 @@ def test_gan_optimize_image(simple_gan):
     np.testing.assert_allclose(optimized_image, goal, atol=0.1, rtol=0.1)
 
 
-def test_gan_utility_funcs(simple_gan):
+def test_gan_utility_funcs(simple_gan: GAN):
     simple_gan.compile('adam', 'adam', ndim_gen_out=2)
     xy_shp = simple_gan.z_shape[1:]
     x = np.zeros(xy_shp, dtype=np.float32)
@@ -149,6 +149,12 @@ def test_gan_utility_funcs(simple_gan):
     debug_out = simple_gan.debug(real, z)
     for debug_label in ['fake', 'real', 'd_loss', 'd_real', 'd_gen', 'g_loss']:
         assert debug_label in debug_out
+
+    z_point = simple_gan.random_z_point()
+    neighbors = simple_gan.neighborhood(z_point, std=0.05)
+
+    diff = np.stack([neighbors[0]]*simple_gan.batch_size) - neighbors
+    assert np.abs(diff).mean() < 0.1
 
 
 def test_gan_graph():
