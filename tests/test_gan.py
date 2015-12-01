@@ -137,6 +137,20 @@ def test_gan_optimize_image(simple_gan):
     np.testing.assert_allclose(optimized_image, goal, atol=0.1, rtol=0.1)
 
 
+def test_gan_utility_funcs(simple_gan):
+    simple_gan.compile('adam', 'adam', ndim_gen_out=2)
+    xy_shp = simple_gan.z_shape[1:]
+    x = np.zeros(xy_shp, dtype=np.float32)
+    y = np.zeros(xy_shp, dtype=np.float32)
+    simple_gan.interpolate(x, y)
+
+    z = np.ones(simple_gan.z_shape, dtype=np.float32)
+    real = np.zeros(simple_gan.g_output_shape())
+    debug_out = simple_gan.debug(real, z)
+    for debug_label in ['fake', 'real', 'd_loss', 'd_real', 'd_gen', 'g_loss']:
+        assert debug_label in debug_out
+
+
 def test_gan_graph():
     g1 = Graph()
     g1.add_input("z", (1, 8, 8))

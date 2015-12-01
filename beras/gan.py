@@ -360,23 +360,29 @@ class GAN(AbstractModel):
 
     def debug(self, X, z=None, *conditionals):
         if z is None:
-            z = np.random.uniform(-1, 1, self.z_shape)
-
+            z = self._uniform_z()
         labels = ['fake', 'real', 'd_loss', 'd_real', 'd_gen', 'g_loss']
-        ins = z + conditionals
-        outs = self._generate(ins)
-        return DotMap(zip(labels, outs))
+        ins = [X, z] + list(conditionals)
+        outs = self._debug(*ins)
+        return DotMap(dict(zip(labels, outs)))
 
     def interpolate(self, x, y):
         z = np.zeros(self.z_shape)
         n = len(z)
         for i in range(n):
             z[i] = x + i/n * (y - x)
-        real = np.zeros_like(z)
-        outs = self.debug(real, z=z)
+        real = np.zeros(self.g_output_shape())
+        outs = self.debug(real, z)
         return outs.fake
 
     def train_batch(self, X, ZD, ZG, k=1):
         for i in range(k):
             self._d_train([X, ZD])
         self._d_train([ZG])
+
+    @property
+    def batch_size(self):
+        return self.z_shape[0]
+
+    def g_output_shape(self):
+        return (self.batch_size, ) + self.G.output_shape[1:]
