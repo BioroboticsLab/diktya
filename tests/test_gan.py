@@ -77,6 +77,7 @@ simple_gan_batch_size = 64
 simple_gan_nb_z = 20
 simple_gan_nb_out = 2
 
+
 @pytest.fixture()
 def simple_gan():
     generator = Sequential()
@@ -114,8 +115,7 @@ def test_gan_save_load(simple_gan):
     directory = tempfile.mkdtemp()
     simple_gan.save(directory)
     loaded_gan = GAN.load(directory)
-    for s, l in zip(simple_gan.z_shapes, loaded_gan.z_shapes):
-        assert tuple(s) == tuple(l)
+    assert tuple(simple_gan.z_shape) == tuple(loaded_gan.z_shape)
 
     for ps, pl in zip(simple_gan.G.params + simple_gan.D.params,
                       loaded_gan.G.params + loaded_gan.D.params):

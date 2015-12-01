@@ -67,7 +67,7 @@ class GAN(AbstractModel):
             return g_loss, d_loss, updates
 
     def __init__(self, generator, discremenator,
-                 z_shapes, num_gen_conditional=0, num_dis_conditional=0,
+                 z_shape, num_gen_conditional=0, num_dis_conditional=0,
                  num_both_conditional=0):
         self.num_dis_conditional = num_dis_conditional
         self.G = generator
@@ -76,9 +76,7 @@ class GAN(AbstractModel):
         self.num_both_conditional = num_both_conditional
         self.rs = T_random.RandomStreams(1334)
 
-        if type(z_shapes[0]) not in [list, tuple]:
-            z_shapes = [z_shapes]
-        self.z_shapes = z_shapes
+        self.z_shape = z_shape
 
     @staticmethod
     def _set_input(model, inputs, labels):
@@ -105,15 +103,20 @@ class GAN(AbstractModel):
         else:
             return out
 
+    def _random_z(self):
+        return self.rs.uniform(self.z_shape, -1, 1)
+
+    def _shared_z(self):
+        return self.rs.uniform(self.z_shape, -1, 1)
+
     def _get_gen_output(self, gen_conditional, train=True):
         gen_conditional = standardize_X(gen_conditional)
-        self.zs = [self.rs.uniform(z, -1, 1) for z in self.z_shapes]
-        self.z_labels = ["z_{}".format(i) for i in range(len(self.z_shapes))]
-        if len(self.z_labels) == 1:
-            self.z_labels = ["z"]
-        self._set_input(self.G, self.zs + gen_conditional,
-                        self.z_labels + ["cond_{}".format(i)
-                                    for i in range(len(gen_conditional))])
+        self.z = self._random_z()
+        self.z_label = "z"
+        self._set_input(self.G, [self.z] + gen_conditional,
+                        [self.z_label] +
+                        ["cond_{}".format(i)
+                         for i in range(len(gen_conditional))])
         return self._get_output(self.G, train)
 
     def _get_dis_output(self, fake, real, dis_conditional, train=True):
@@ -164,6 +167,7 @@ class GAN(AbstractModel):
         g_loss, d_loss, d_loss_real, d_loss_gen = \
             self.losses(x_real, gen_conditional, dis_conditional,
                         both_conditional)
+        z = self.z
         g_out = self.g_out
         g_loss, d_loss, reg_updates = gan_regulizer.get_losses(self, g_loss, d_loss)
 
@@ -192,12 +196,12 @@ class GAN(AbstractModel):
             allow_input_downcast=True,
             mode=mode)
 
-        zs = [TensorType(z.dtype, z.broadcastable)() for z in self.zs]
-        replace_zs = list(zip(self.zs, zs))
+        v.placeholder_z = TensorType(self.z.dtype, self.z.broadcastable)()
+        v.replace_z = [(self.z, v.placeholder_z)]
         self._debug = theano.function(
-            [v.x_real] + zs + v.gen_conditional + v.dis_conditional + v.both_conditional,
+            [v.x_real, v.placeholder_z] + v.gen_conditional + v.dis_conditional + v.both_conditional,
             [v.g_out, v.x_real, v.d_loss, v.d_loss_real, v.d_loss_gen, v.g_loss],
-            allow_input_downcast=True, mode=mode, givens=replace_zs)
+            allow_input_downcast=True, mode=mode, givens=v.replace_z)
 
 
     def fit(self, X, gen_conditional=None, dis_conditional=None,
@@ -255,7 +259,7 @@ class GAN(AbstractModel):
         G = model_from_config(config['G'])
         D = model_from_config(config['D'])
         return GAN(G, D,
-                   config['z_shapes'],
+                   config['z_shape'],
                    config['num_gen_conditional'],
                    config['num_dis_conditional'],
                    config['num_both_conditional'])
@@ -266,7 +270,7 @@ class GAN(AbstractModel):
         return {
             'G': g_config,
             'D': d_config,
-            'z_shapes': self.z_shapes,
+            'z_shape': self.z_shape,
             'num_gen_conditional': self.num_gen_conditional,
             'num_dis_conditional': self.num_dis_conditional,
             'num_both_conditional': self.num_both_conditional,
@@ -281,23 +285,22 @@ class GAN(AbstractModel):
     def generate(self, *conditional):
         return self._generate(*conditional)[0]
 
-    def debug(self, X, zs=None, *conditionals):
-        if zs is None:
-            zs = [np.random.uniform(-1, 1, z_shp) for z_shp in self.z_shapes]
+    def debug(self, X, z=None, *conditionals):
+        if z is None:
+            z = np.random.uniform(-1, 1, self.z_shape)
 
         labels = ['fake', 'real', 'd_loss', 'd_real', 'd_gen', 'g_loss']
-        ins = zs + conditionals
+        ins = z + conditionals
         outs = self._generate(ins)
         return DotMap(zip(labels, outs))
 
     def interpolate(self, x, y):
-        assert len(self.z_shapes) == 1
-        z = np.zeros(self.z_shapes[0])
+        z = np.zeros(self.z_shape)
         n = len(z)
         for i in range(n):
             z[i] = x + i/n * (y - x)
         real = np.zeros_like(z)
-        outs = self.debug(real, zs=[z])
+        outs = self.debug(real, z=z)
         return outs.fake
 
     def train_batch(self, X, ZD, ZG, k=1):
