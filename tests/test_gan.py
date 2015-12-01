@@ -14,6 +14,8 @@
 import shutil
 import tempfile
 
+from keras.utils.theano_utils import floatX
+
 from . import visual_debug, TEST_OUTPUT_DIR
 import os
 import keras
@@ -32,7 +34,7 @@ import pytest
 from beras.gan import GAN
 import numpy as np
 from beras.util import LossPrinter
-
+from keras.objectives import mean_squared_error
 
 def sample_circle(nb_samples):
     center = (0.2, 0.2)
@@ -76,6 +78,7 @@ class Plotter(keras.callbacks.Callback):
 simple_gan_batch_size = 64
 simple_gan_nb_z = 20
 simple_gan_nb_out = 2
+simple_gan_z_shape = (simple_gan_batch_size, simple_gan_nb_z)
 
 
 @pytest.fixture()
@@ -89,7 +92,7 @@ def simple_gan():
     discriminator = Sequential()
     discriminator.add(Dense(20, activation='relu', input_dim=2))
     discriminator.add(Dense(1, activation='sigmoid'))
-    return GAN(generator, discriminator, (simple_gan_batch_size, simple_gan_nb_z))
+    return GAN(generator, discriminator, simple_gan_z_shape)
 
 
 def test_gan_learn_simle_distribution(simple_gan):
@@ -123,6 +126,17 @@ def test_gan_save_load(simple_gan):
     shutil.rmtree(directory)
 
 
+def test_gan_optimize_image(simple_gan):
+    loss_fn = lambda t, p: mean_squared_error(t, p).mean()
+    simple_gan.compile_optimize_image('adam', loss_fn, ndim_expected=2)
+    z = floatX(np.random.uniform(-1, 1, simple_gan.z_shape))
+    goal = simple_gan.generate()
+    nb_iteration = 1000
+    optimized_image, optimized_z = simple_gan.optimize_image(
+        goal, nb_iteration, z_start=z, verbose=1)
+    np.testing.assert_allclose(optimized_image, goal, atol=0.1, rtol=0.1)
+
+
 def test_gan_graph():
     g1 = Graph()
     g1.add_input("z", (1, 8, 8))
@@ -139,7 +153,7 @@ def test_gan_graph():
     z_shape = (1, 1, 8, 8)
     gan = GAN(g1, d1, z_shape, num_gen_conditional=1)
     gan.compile('adam', 'adam')
-    gan.generate(np.zeros(z_shape))
+    gan.generate(conditionals=[np.zeros(z_shape)])
 
 
 def test_gan_l2_regularizer():
@@ -176,4 +190,4 @@ def test_conditional_conv_gan():
     z_shape = (1, 1, 8, 8)
     gan = GAN(g1, d1, z_shape, num_gen_conditional=1)
     gan.compile('adam', 'adam')
-    gan.generate(np.zeros(z_shape))
+    gan.generate(conditionals=[np.zeros(z_shape)])

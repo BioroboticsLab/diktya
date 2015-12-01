@@ -108,15 +108,24 @@ class GAN(AbstractModel):
         return self.rs.uniform(self.z_shape, -1, 1)
 
     def _shared_z(self):
-        return self.rs.uniform(self.z_shape, -1, 1)
+        return theano.shared(floatX(np.zeros(self.z_shape)))
 
-    def _get_gen_output(self, gen_conditional, train=True):
+    def _get_z(self, z_type):
+        if hasattr(z_type, 'ndim'):
+            return z_type
+        elif z_type == 'random':
+            return self._random_z()
+        elif z_type == 'shared':
+            return self._shared_z()
+        else:
+            raise ValueError("must be either `random` or `shared`, "
+                             "got: {}".format(z_type))
+
+    def _get_gen_output(self, gen_conditional, z, train=True):
         gen_conditional = standardize_X(gen_conditional)
-        self.z = self._random_z()
         self.z_label = "z"
-        self._set_input(self.G, [self.z] + gen_conditional,
-                        [self.z_label] +
-                        ["cond_{}".format(i)
+        self._set_input(self.G, [z] + gen_conditional,
+                        [self.z_label] + ["cond_{}".format(i)
                          for i in range(len(gen_conditional))])
         return self._get_output(self.G, train)
 
@@ -129,19 +138,10 @@ class GAN(AbstractModel):
                          for i in range(len(dis_conditional))])
         return self._get_output(self.D, train)
 
-    def losses(self, real, gen_conditional=[], dis_conditional=[],
-               both_conditional=[], gen_out=None,
-               objective=binary_crossentropy):
-        if gen_out is None:
-            gen_out = self._get_gen_output(gen_conditional + both_conditional)
-
-        self.g_out = gen_out
-        self.d_out = self._get_dis_output(gen_out, real,
-                                          dis_conditional + both_conditional)
-
-        batch_size = self.d_out.shape[0]
-        d_out_given_fake = self.d_out[:batch_size // 2]
-        d_out_given_real = self.d_out[batch_size // 2:]
+    def losses(self, d_out, objective=binary_crossentropy):
+        batch_size = d_out.shape[0]
+        d_out_given_fake = d_out[:batch_size // 2]
+        d_out_given_real = d_out[batch_size // 2:]
         d_loss_fake = objective(T.zeros_like(d_out_given_fake),
                                 d_out_given_fake).mean()
         d_loss_real = objective(T.ones_like(d_out_given_real),
@@ -151,59 +151,125 @@ class GAN(AbstractModel):
                            d_out_given_fake).mean()
         return g_loss, d_loss, d_loss_real, d_loss_fake
 
-    def build(self, optimizer_g=None, optimizer_d=None, gan_regulizer=None, mode=None, ndim_gen_out=4):
-        if gan_regulizer is None:
-            gan_regulizer = GAN.Regularizer()
-        elif gan_regulizer == 'l2':
-            gan_regulizer = GAN.L2Regularizer()
+    @staticmethod
+    def _placeholder(x):
+        # if is shared value
+        if hasattr(x, 'get_value'):
+            return ndim_tensor(len(x.get_value().shape))
+        else:
+            return TensorType(x.dtype, x.broadcastable)()
 
-        x_real = ndim_tensor(ndim_gen_out)
+    def _build(self, ndim_gen_out=4, z_type='random'):
+        real = ndim_tensor(ndim_gen_out)
         gen_conditional = [T.tensor4("gen_conditional_{}".format(i))
                            for i in range(self.num_gen_conditional)]
         both_conditional = [T.tensor4("conditional_{}".format(i))
                             for i in range(self.num_both_conditional)]
         dis_conditional = [T.tensor4("dis_conditional_{}".format(i))
                            for i in range(self.num_dis_conditional)]
+        z = self._get_z(z_type)
+        g_out = self._get_gen_output(gen_conditional + both_conditional, z)
+        d_out = self._get_dis_output(g_out, real, dis_conditional + both_conditional)
 
-        g_loss, d_loss, d_loss_real, d_loss_gen = \
-            self.losses(x_real, gen_conditional, dis_conditional,
-                        both_conditional)
-        z = self.z
-        g_out = self.g_out
-        g_loss, d_loss, reg_updates = gan_regulizer.get_losses(self, g_loss, d_loss)
+        g_loss, d_loss, d_loss_real, d_loss_gen = self.losses(d_out)
 
-        if optimizer_d and optimizer_g:
-            optimizer_g = optimizers.get(optimizer_g)
-            optimizer_d = optimizers.get(optimizer_d)
-            g_updates = optimizer_g.get_updates(
-                self.G.params, self.G.constraints, g_loss)
-            d_updates = optimizer_d.get_updates(
-                self.D.params, self.D.constraints, d_loss)
+        placeholder_z = self._placeholder(z)
+        replace_z = [(z, placeholder_z)]
+        return DotMap(locals())
 
-        self.vars = DotMap(locals())
+    def build_optimize_images(self, ndim_gen_out=4):
+        pass
+
+    def build(self, optimizer_g, optimizer_d, gan_regulizer=None,
+              mode=None, ndim_gen_out=4, z_type='random'):
+        if gan_regulizer is None:
+            gan_regulizer = GAN.Regularizer()
+        elif gan_regulizer == 'l2':
+            gan_regulizer = GAN.L2Regularizer()
+
+        v = self._build(ndim_gen_out, z_type)
+        optimizer_g = optimizers.get(optimizer_g)
+        optimizer_d = optimizers.get(optimizer_d)
+        g_updates = optimizer_g.get_updates(
+            self.G.params, self.G.constraints, v.g_loss)
+        d_updates = optimizer_d.get_updates(
+            self.D.params, self.D.constraints, v.d_loss)
+        g_loss, d_loss, reg_updates = gan_regulizer.get_losses(
+            self, v.g_loss, v.d_loss)
+        map = DotMap(locals())
+        map.update(v)
+        del map['v']
+        assert 'd_updates' in map
+        return map
+
+    def _compile_generate(self, v, mode=None):
+        conditionals = v.gen_conditional + v.both_conditional
+        self._generate = theano.function(
+            [v.placeholder_z] + conditionals,
+            [v.g_out],
+            allow_input_downcast=True,
+            mode=mode, givens=v.replace_z)
 
     def compile(self, optimizer_g, optimizer_d, gan_regulizer=None, mode=None, ndim_gen_out=4):
-        if not hasattr(self, 'vars'):
-            self.build(optimizer_g, optimizer_d, gan_regulizer, mode, ndim_gen_out)
-        v = self.vars
+        v = self.build(optimizer_g, optimizer_d, gan_regulizer, mode, ndim_gen_out)
+        self.build_vars = v
+        conditionals = v.gen_conditional + v.dis_conditional + v.both_conditional
         self._train = theano.function(
-            [v.x_real] + v.gen_conditional + v.dis_conditional + v.both_conditional,
+            [v.real] + conditionals,
             [v.d_loss, v.d_loss_real, v.d_loss_gen, v.g_loss],
             updates=v.d_updates + v.g_updates + v.reg_updates,
             allow_input_downcast=True, mode=mode)
-        self._generate = theano.function(
-            v.gen_conditional + v.dis_conditional + v.both_conditional,
-            [self.g_out],
-            allow_input_downcast=True,
-            mode=mode)
 
-        v.placeholder_z = TensorType(self.z.dtype, self.z.broadcastable)()
-        v.replace_z = [(self.z, v.placeholder_z)]
+        self._compile_generate(v, mode)
+
         self._debug = theano.function(
-            [v.x_real, v.placeholder_z] + v.gen_conditional + v.dis_conditional + v.both_conditional,
-            [v.g_out, v.x_real, v.d_loss, v.d_loss_real, v.d_loss_gen, v.g_loss],
+            [v.real, v.placeholder_z] + conditionals,
+            [v.g_out, v.real, v.d_loss, v.d_loss_real, v.d_loss_gen, v.g_loss],
             allow_input_downcast=True, mode=mode, givens=v.replace_z)
 
+    def compile_optimize_image(self, optimizer, image_loss_fn, ndim_expected=4, mode=None):
+        v = self._build(ndim_gen_out=ndim_expected, z_type='shared')
+        print(v.z)
+        print(type(v.z))
+        optimizer = optimizers.get(optimizer)
+        self.build_image_loss_vars = v
+        out_expected = ndim_tensor(ndim_expected)
+        v.image_loss = image_loss_fn(out_expected, v.g_out)
+        v.image_updates = optimizer.get_updates([v.z], self.D.constraints, v.image_loss)
+
+        conditionals = v.gen_conditional + v.both_conditional
+        self._optimize_image_fn = theano.function(
+            [out_expected] + conditionals, [v.image_loss],
+            updates=v.image_updates, allow_input_downcast=True, mode=mode)
+
+        self._compile_generate(v, mode)
+
+    def _uniform_z(self):
+        return np.random.uniform(-1, 1, self.z_shape)
+
+    def optimize_image(self, expected_image, nb_iterations, z_start=None, callbacks=None, verbose=0):
+        if z_start is None:
+            z_start = self._uniform_z()
+
+        z = self.build_image_loss_vars.z
+        z.set_value(z_start)
+        if callbacks is None:
+            callbacks = []
+        labels = ['loss']
+        batch_size = self.z_shape[0]
+
+        def optimize(model, batch_ids, batch_index, batch_logs=None):
+            if batch_logs is None:
+                batch_logs = {}
+            outs = self._optimize_image_fn(expected_image)
+            for key, value in zip(labels, outs):
+                batch_logs[key] = value
+
+        assert batch_size % 2 == 0, "batch_size must be multiple of two."
+        self._fit(optimize, batch_size*nb_iterations,
+                  batch_size=batch_size, nb_epoch=1, verbose=verbose,
+                  callbacks=callbacks, shuffle=False, metrics=labels)
+        return self.generate(z.get_value()), z.get_value()
 
     def fit(self, X, gen_conditional=None, dis_conditional=None,
             batch_size=128, nb_epoch=100, verbose=0,
@@ -283,8 +349,11 @@ class GAN(AbstractModel):
             json.dump(self.get_config(), f)
         self.save_weights(self._weight_fname_tmpl(directory), overwrite)
 
-    def generate(self, *conditional):
-        return self._generate(*conditional)[0]
+    def generate(self, z=None, conditionals=[]):
+        if z is None:
+            z = self._uniform_z()
+        ins = [z] + list(conditionals)
+        return self._generate(*ins)[0]
 
     def debug(self, X, z=None, *conditionals):
         if z is None:
