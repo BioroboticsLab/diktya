@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import shutil
 import tempfile
 
 from . import visual_debug, TEST_OUTPUT_DIR
@@ -119,6 +120,7 @@ def test_gan_save_load(simple_gan):
     for ps, pl in zip(simple_gan.G.params + simple_gan.D.params,
                       loaded_gan.G.params + loaded_gan.D.params):
         np.testing.assert_allclose(pl.get_value(), ps.get_value())
+    shutil.rmtree(directory)
 
 
 def test_gan_graph():
