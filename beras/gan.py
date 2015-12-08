@@ -229,8 +229,6 @@ class GAN(AbstractModel):
 
     def compile_optimize_image(self, optimizer, image_loss_fn, ndim_expected=4, mode=None):
         v = self._build(ndim_gen_out=ndim_expected, z_type='shared')
-        print(v.z)
-        print(type(v.z))
         optimizer = optimizers.get(optimizer)
         self.build_image_loss_vars = v
         out_expected = ndim_tensor(ndim_expected)
@@ -245,7 +243,7 @@ class GAN(AbstractModel):
         self._compile_generate(v, mode)
 
     def _uniform_z(self):
-        return np.random.uniform(-1, 1, self.z_shape)
+        return floatX(np.random.uniform(-1, 1, self.z_shape))
 
     def optimize_image(self, expected_image, nb_iterations, z_start=None,
                        callbacks=None, verbose=0, conditionals=[]):
@@ -253,7 +251,7 @@ class GAN(AbstractModel):
             z_start = self._uniform_z()
 
         z = self.build_image_loss_vars.z
-        z.set_value(z_start)
+        z.set_value(floatX(z_start))
         if callbacks is None:
             callbacks = []
         labels = ['loss']
