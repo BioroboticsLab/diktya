@@ -86,13 +86,13 @@ def upsample(input):
     return upsample_layer.get_output(train=False)
 
 
-def blur(input, sigma=3., add_border=True):
+def blur(input, sigma=2., add_border=True):
     import skimage.filters
     if type(input) == list:
         assert len(input) == 1
         input = input[0]
 
-    size = ceil(2*sigma-1)
+    size = ceil(2*sigma+1)
     a = np.zeros((size, size))
     center = size // 2
     a[center, center] = 1
