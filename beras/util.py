@@ -16,12 +16,14 @@ from math import ceil
 from math import sqrt
 
 import keras
+import skimage
 from keras.callbacks import Callback
 from keras.layers.convolutional import Convolution2D
 import numpy as np
 import theano
 import theano.tensor as T
 from keras.layers.core import Layer
+from keras.utils.theano_utils import floatX
 from scipy.misc import imsave
 
 
@@ -84,16 +86,24 @@ def upsample(input):
     return upsample_layer.get_output(train=False)
 
 
-def blur(input):
+def blur(input, sigma=3., add_border=True):
+    import skimage.filters
     if type(input) == list:
         assert len(input) == 1
         input = input[0]
-    with_border = _add_virtual_border(input)
+
+    size = ceil(2*sigma-1)
+    a = np.zeros((size, size))
+    center = size // 2
+    a[center, center] = 1
+    gaussian_kernel = skimage.filters.gaussian_filter(a, sigma)
+    gaussian_kernel = gaussian_kernel[np.newaxis, np.newaxis]
+    if add_border:
+        input = _add_virtual_border(input, filter_size=size)
     blur_layer = Convolution2D(1, 5, 5, border_mode='valid',
-                                input_shape=(1, None, None))
-    blur_layer_weight = _gaussian_blur_kernel/256.
-    blur_layer.W = theano.shared(blur_layer_weight)
-    blur_layer.input = with_border
+                               input_shape=(1, None, None))
+    blur_layer.W = theano.shared(floatX(gaussian_kernel))
+    blur_layer.input = input
     return blur_layer.get_output(train=False)
 
 
