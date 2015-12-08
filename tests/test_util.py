@@ -36,10 +36,12 @@ def lena():
     lena = scipy.misc.lena() / 255.
     return floatX(lena[::4, ::4])
 
+
 def plt_save_and_maybe_show(fname):
     plt.savefig(os.path.join(TEST_OUTPUT_DIR, fname))
     if visual_debug:
         plt.show()
+
 
 def test_add_border():
     filter_size = 7

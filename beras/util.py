@@ -100,7 +100,7 @@ def blur(input, sigma=2., add_border=True):
     gaussian_kernel = gaussian_kernel[np.newaxis, np.newaxis]
     if add_border:
         input = _add_virtual_border(input, filter_size=size)
-    blur_layer = Convolution2D(1, 5, 5, border_mode='valid',
+    blur_layer = Convolution2D(1, size, size, border_mode='valid',
                                input_shape=(1, None, None))
     blur_layer.W = theano.shared(floatX(gaussian_kernel))
     blur_layer.input = input
