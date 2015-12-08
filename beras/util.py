@@ -155,6 +155,23 @@ def _add_virtual_border(input, filter_size=5):
     return wb
 
 
+def sobel(img):
+    conv_x = Convolution2D(1, 3, 3, border_mode='valid',
+                           input_shape=(1, None, None))
+    conv_y = Convolution2D(1, 3, 3, border_mode='valid',
+                           input_shape=(1, None, None))
+    filter = floatX(np.array([
+        [1, 0, -1],
+        [2, 0, -2],
+        [1, 0, -1],
+    ]))
+    conv_x.W = theano.shared(filter[np.newaxis, np.newaxis])
+    conv_y.W = theano.shared(np.transpose(filter)[np.newaxis, np.newaxis])
+    conv_x.input = img
+    conv_y.input = img
+    return conv_x.get_output(train=False), conv_y.get_output(train=False)
+
+
 def downsample(input):
     if type(input) == list:
         assert len(input) == 1

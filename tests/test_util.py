@@ -16,6 +16,7 @@ import random
 from timeit import Timer
 
 import pytest
+from keras.utils.theano_utils import floatX
 
 from . import visual_debug, TEST_OUTPUT_DIR
 from colorsys import hsv_to_rgb
@@ -24,14 +25,16 @@ import skimage
 import skimage.transform
 import theano
 import numpy as np
-from beras.util import _add_virtual_border, downsample, upsample, tile, blur
+from beras.util import _add_virtual_border, downsample, upsample, tile, blur, \
+    sobel
 import matplotlib.pyplot as plt
 import theano.tensor as T
 
+
 @pytest.fixture
 def lena():
-    lena = scipy.misc.lena() / 255
-    return lena[::4, ::4]
+    lena = scipy.misc.lena() / 255.
+    return floatX(lena[::4, ::4])
 
 def plt_save_and_maybe_show(fname):
     plt.savefig(os.path.join(TEST_OUTPUT_DIR, fname))
@@ -68,8 +71,21 @@ def test_benchmark_add_border():
     print("add_border took: {:.4f}ms".format(1000 * t.timeit(number=n) / n))
 
 
+def test_sobel(lena):
+    x = theano.shared(lena[np.newaxis, np.newaxis])
+    sobel_x, sobel_y = [s.eval() for s in sobel(x)]
+    plt.subplot(131)
+    plt.imshow(x.get_value()[0, 0, :])
+    plt.subplot(132)
+    plt.imshow(sobel_x[0, 0, :])
+    plt.subplot(133)
+    plt.imshow(sobel_y[0, 0, :])
+    plt_save_and_maybe_show("test_sobel.png")
+    plt.show()
+
+
 def test_blur(lena):
-    x = theano.shared(lena[:64, :64].reshape(1, 1, 64, 64))
+    x = theano.shared(lena[np.newaxis, np.newaxis, :64, :64])
     lena_blur = blur(x, sigma=3).eval()
     assert lena_blur.shape == x.get_value().shape
     plt.subplot(121)
