@@ -79,6 +79,10 @@ class GAN(AbstractModel):
 
         self.z_shape = z_shape
 
+    @property
+    def batch_size(self):
+        return self.z_shape[0]
+
     @staticmethod
     def _set_input(model, inputs, labels):
         if type(model) == Sequential:
@@ -139,9 +143,8 @@ class GAN(AbstractModel):
         return self._get_output(self.D, train)
 
     def losses(self, d_out, objective=binary_crossentropy):
-        batch_size = d_out.shape[0]
-        d_out_given_fake = d_out[:batch_size // 2]
-        d_out_given_real = d_out[batch_size // 2:]
+        d_out_given_fake = d_out[:self.batch_size // 2]
+        d_out_given_real = d_out[self.batch_size // 2:]
         d_loss_fake = objective(T.zeros_like(d_out_given_fake),
                                 d_out_given_fake).mean()
         d_loss_real = objective(T.ones_like(d_out_given_real),
@@ -255,7 +258,6 @@ class GAN(AbstractModel):
         if callbacks is None:
             callbacks = []
         labels = ['loss']
-        batch_size = self.z_shape[0]
 
         def optimize(model, batch_ids, batch_index, batch_logs=None):
             if batch_logs is None:
@@ -266,14 +268,14 @@ class GAN(AbstractModel):
             for key, value in zip(labels, outs):
                 batch_logs[key] = value
 
-        assert batch_size % 2 == 0, "batch_size must be multiple of two."
-        self._fit(optimize, batch_size*nb_iterations,
-                  batch_size=batch_size, nb_epoch=1, verbose=verbose,
+        assert self.batch_size % 2 == 0, "batch_size must be multiple of two."
+        self._fit(optimize, self.batch_size*nb_iterations,
+                  batch_size=self.batch_size, nb_epoch=1, verbose=verbose,
                   callbacks=callbacks, shuffle=False, metrics=labels)
         return self.generate(z.get_value()), z.get_value()
 
     def fit(self, X, gen_conditional=None, dis_conditional=None,
-            batch_size=128, nb_epoch=100, verbose=0,
+            nb_epoch=100, verbose=0,
             callbacks=None, shuffle=True):
         if callbacks is None:
             callbacks = []
@@ -293,8 +295,8 @@ class GAN(AbstractModel):
             for key, value in zip(labels, outs):
                 batch_logs[key] = value
 
-        assert batch_size % 2 == 0, "batch_size must be multiple of two."
-        self._fit(train, len(X), batch_size=batch_size, nb_epoch=nb_epoch,
+        assert self.batch_size % 2 == 0, "batch_size must be multiple of two."
+        self._fit(train, len(X), batch_size=self.batch_size, nb_epoch=nb_epoch,
                   verbose=verbose, callbacks=callbacks, shuffle=shuffle,
                   metrics=labels)
 
