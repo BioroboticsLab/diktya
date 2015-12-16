@@ -213,6 +213,13 @@ class GAN(AbstractModel):
             allow_input_downcast=True,
             mode=mode, givens=v.replace_z)
 
+    def _compile_debug(self, v, mode=None):
+        conditionals = v.gen_conditional + v.dis_conditional + v.both_conditional
+        self._debug = theano.function(
+            [v.real, v.placeholder_z] + conditionals,
+            [v.g_out, v.real, v.d_loss, v.d_loss_real, v.d_loss_gen, v.g_loss],
+            allow_input_downcast=True, mode=mode, givens=v.replace_z)
+
     def compile(self, optimizer_g, optimizer_d, gan_regulizer=None, mode=None, ndim_gen_out=4):
         v = self.build(optimizer_g, optimizer_d, gan_regulizer, mode, ndim_gen_out)
         self.build_vars = v
@@ -224,11 +231,7 @@ class GAN(AbstractModel):
             allow_input_downcast=True, mode=mode)
 
         self._compile_generate(v, mode)
-
-        self._debug = theano.function(
-            [v.real, v.placeholder_z] + conditionals,
-            [v.g_out, v.real, v.d_loss, v.d_loss_real, v.d_loss_gen, v.g_loss],
-            allow_input_downcast=True, mode=mode, givens=v.replace_z)
+        self._compile_debug(v, mode)
 
     def compile_optimize_image(self, optimizer, image_loss_fn, ndim_expected=4, mode=None):
         v = self._build(ndim_gen_out=ndim_expected, z_type='shared')
@@ -244,6 +247,7 @@ class GAN(AbstractModel):
             updates=v.image_updates, allow_input_downcast=True, mode=mode)
 
         self._compile_generate(v, mode)
+        self._compile_debug(v, mode)
 
     def _uniform_z(self):
         return floatX(np.random.uniform(-1, 1, self.z_shape))
