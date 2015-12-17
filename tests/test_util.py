@@ -16,9 +16,8 @@ import random
 from timeit import Timer
 
 import pytest
-from keras.utils.theano_utils import floatX
-
-from . import visual_debug, TEST_OUTPUT_DIR
+from keras.backend.common import cast_to_floatx
+from tests import visual_debug, TEST_OUTPUT_DIR
 from colorsys import hsv_to_rgb
 import scipy
 import skimage
@@ -34,7 +33,7 @@ import theano.tensor as T
 @pytest.fixture
 def lena():
     lena = scipy.misc.lena() / 255.
-    return floatX(lena[::4, ::4])
+    return cast_to_floatx(lena[::4, ::4])
 
 
 def plt_save_and_maybe_show(fname):

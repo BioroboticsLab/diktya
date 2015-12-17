@@ -23,7 +23,7 @@ import numpy as np
 import theano
 import theano.tensor as T
 from keras.layers.core import Layer
-from keras.utils.theano_utils import floatX
+from keras.backend.common import cast_to_floatx, floatx
 from scipy.misc import imsave
 
 
@@ -66,7 +66,7 @@ _gaussian_blur_kernel = np.asarray([[[
     [6., 24., 36., 24., 6.],
     [4., 16., 24., 16., 4.],
     [1., 4., 6., 4., 1.]
-]]], dtype=theano.config.floatX)
+]]], dtype=floatx())
 
 
 def upsample(input):
@@ -102,7 +102,7 @@ def blur(input, sigma=2., add_border=True):
         input = _add_virtual_border(input, filter_size=size)
     blur_layer = Convolution2D(1, size, size, border_mode='valid',
                                input_shape=(1, None, None))
-    blur_layer.W = theano.shared(floatX(gaussian_kernel))
+    blur_layer.W = theano.shared(cast_to_floatx(gaussian_kernel))
     blur_layer.input = input
     return blur_layer.get_output(train=False)
 
@@ -160,7 +160,7 @@ def sobel(img):
                            input_shape=(1, None, None))
     conv_y = Convolution2D(1, 3, 3, border_mode='valid',
                            input_shape=(1, None, None))
-    filter = floatX(np.array([
+    filter = cast_to_floatx(np.array([
         [1, 0, -1],
         [2, 0, -2],
         [1, 0, -1],

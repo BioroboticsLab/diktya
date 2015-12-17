@@ -14,16 +14,15 @@
 import shutil
 import tempfile
 
-from keras.utils.theano_utils import floatX
-
-from . import visual_debug, TEST_OUTPUT_DIR
+from keras.backend.common import cast_to_floatx
+from tests import visual_debug, TEST_OUTPUT_DIR
 import os
 import keras
 import theano
 from dotmap import DotMap
 from keras.callbacks import ModelCheckpoint
 import keras.initializations
-from keras.layers.convolutional import Convolution2D, UpSample2D, MaxPooling2D
+from keras.layers.convolutional import Convolution2D, MaxPooling2D, UpSampling2D
 from keras.layers.core import Dense, Dropout, MaxoutDense, Flatten
 
 from keras.models import Sequential, Graph
@@ -35,6 +34,7 @@ from beras.gan import GAN
 import numpy as np
 from beras.util import LossPrinter
 from keras.objectives import mean_squared_error
+
 
 def sample_circle(nb_samples):
     center = (0.2, 0.2)
@@ -95,7 +95,7 @@ def simple_gan():
     return GAN(generator, discriminator, simple_gan_z_shape)
 
 
-def test_gan_learn_simle_distribution(simple_gan):
+def test_gan_learn_simple_distribution():
     def sample_multivariate(nb_samples):
         mean = (0.2, 0)
         cov = [[0.5,  0.1],
@@ -106,12 +106,19 @@ def test_gan_learn_simle_distribution(simple_gan):
     # X = sample_multivariate(nb_samples)
     X = sample_circle(nb_samples)
 
-    for r in (GAN.Regularizer(), GAN.L2Regularizer()):
-        simple_gan.compile('adam', 'adam', ndim_gen_out=2, gan_regulizer=r)
+    for r in (GAN.Regularizer(), GAN.Regularizer()):
+        gan = simple_gan()
+        gan.compile('adam', 'adam', ndim_gen_out=2, gan_regulizer=r)
         callbacks = [LossPrinter()]
         if visual_debug:
             callbacks.append(Plotter(X, TEST_OUTPUT_DIR + "/epoches_plot"))
-        simple_gan.fit(X, nb_epoch=1, verbose=0, batch_size=simple_gan_batch_size, callbacks=callbacks)
+        gan.fit(X, nb_epoch=1, verbose=0, callbacks=callbacks)
+
+
+@pytest.mark.skipif(reason="No multiple comiples #1")
+def test_gan_multiple_compiles(simple_gan):
+    simple_gan.compile('adam', 'adam', ndim_gen_out=2)
+    simple_gan.compile('adam', 'adam', ndim_gen_out=2)
 
 
 def test_gan_save_load(simple_gan):
@@ -129,7 +136,7 @@ def test_gan_save_load(simple_gan):
 def test_gan_optimize_image(simple_gan):
     loss_fn = lambda t, p: mean_squared_error(t, p).mean()
     simple_gan.compile_optimize_image('adam', loss_fn, ndim_expected=2)
-    z = floatX(np.random.uniform(-1, 1, simple_gan.z_shape))
+    z = cast_to_floatx(np.random.uniform(-1, 1, simple_gan.z_shape))
     goal = simple_gan.generate()
     nb_iteration = 1000
     optimized_image, optimized_z = simple_gan.optimize_image(
@@ -196,7 +203,7 @@ def test_gan_l2_regularizer():
 def test_conditional_conv_gan():
     g1 = Sequential()
     g1.add(Convolution2D(10, 2, 2, activation='relu', border_mode='same', input_shape=(2, 8, 8)))
-    g1.add(UpSample2D((2, 2)))
+    g1.add(UpSampling2D((2, 2)))
     g1.add(Convolution2D(1, 2, 2, activation='sigmoid', border_mode='same'))
 
     d1 = Sequential()
