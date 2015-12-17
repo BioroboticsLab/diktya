@@ -16,19 +16,11 @@ from __future__ import absolute_import
 from __future__ import print_function
 from keras.models import batch_shuffle, slice_X, get_function_name
 from keras.models import make_batches
-import theano
-import theano.tensor as T
 import numpy as np
-import warnings, time, copy, pprint
+import pprint
 
-from keras import optimizers
-from keras import objectives
-from keras import regularizers
-from keras import constraints
 from keras import callbacks as cbks
-from keras.utils.layer_utils import container_from_config
-from keras.utils.generic_utils import Progbar, printv
-from keras.layers import containers
+from keras.utils.generic_utils import Progbar
 
 
 class AbstractModel(object):
