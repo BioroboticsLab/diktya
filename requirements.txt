@@ -1,4 +1,4 @@
 git+https://github.com/fchollet/keras.git#egg=keras
-git+https://github.com/EderSantana/seya.git#egg=seya
 numpy==1.10.1
+git+https://github.com/EderSantana/seya.git#egg=seya
 pytest==2.8.5
