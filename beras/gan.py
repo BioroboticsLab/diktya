@@ -70,18 +70,19 @@ class GAN(AbstractModel):
             d_loss = self._apply_l2_regulizer(gan.D.params, d_loss)
             return g_loss, d_loss, updates
 
-    def __init__(self, generator, discremenator,
-                 z_shape, num_gen_conditional=0, num_dis_conditional=0,
-                 num_both_conditional=0):
-        self.num_dis_conditional = num_dis_conditional
+    def __init__(self, generator, discremenator, z_shape,
+                 gen_conditionals=None, dis_conditionals=None,
+                 both_conditionals=None):
         self.G = generator
         self.D = discremenator
-        self.num_gen_conditional = num_gen_conditional
-        self.num_both_conditional = num_both_conditional
-        self.rs = T_random.RandomStreams(1334)
 
+        self.dis_conditionals = [] if dis_conditionals is None else dis_conditionals
+        self.gen_conditionals = [] if gen_conditionals is None else gen_conditionals
+        self.both_conditionals = [] if both_conditionals is None else both_conditionals
+        self.rs = T_random.RandomStreams(1334)
         self.z_label = "z"
         self.z_shape = z_shape
+        self.ndim_gen_out = len(self.G.output_shape)
 
     @property
     def batch_size(self):
@@ -133,7 +134,7 @@ class GAN(AbstractModel):
         gen_conditional = standardize_X(gen_conditional)
         self._set_input(self.G, [z] + gen_conditional,
                         [self.z_label] + ["cond_{}".format(i)
-                         for i in range(len(gen_conditional))])
+                                          for i in range(len(gen_conditional))])
         return self._get_output(self.G, train)
 
     def _get_dis_output(self, fake, real, dis_conditional, train=True):
@@ -166,14 +167,17 @@ class GAN(AbstractModel):
         else:
             return TensorType(x.dtype, x.broadcastable)()
 
-    def build_loss(self, ndim_gen_out=4, z='random'):
-        real = K.placeholder(ndim=ndim_gen_out, name="real")
-        gen_conditional = [T.tensor4("gen_conditional_{}".format(i))
-                           for i in range(self.num_gen_conditional)]
-        both_conditional = [T.tensor4("conditional_{}".format(i))
-                            for i in range(self.num_both_conditional)]
-        dis_conditional = [T.tensor4("dis_conditional_{}".format(i))
-                           for i in range(self.num_dis_conditional)]
+    def build_loss(self, z='random'):
+        real = K.placeholder(ndim=self.ndim_gen_out, name="real")
+        gen_conditional = \
+            [K.placeholder(c, name="gen_conditional_{}".format(c))
+             for c in self.gen_conditionals]
+        both_conditional = \
+            [K.placeholder(c, name="both_conditional_{}".format(c))
+             for c in self.both_conditionals]
+        dis_conditional = \
+            [K.placeholder(c, name="dis_conditional_{}".format(c))
+             for c in self.dis_conditionals]
         z = self._get_z(z)
         g_out = self._get_gen_output(gen_conditional + both_conditional, z)
         d_out = self._get_dis_output(g_out, real,
@@ -335,9 +339,9 @@ class GAN(AbstractModel):
         D = model_from_config(config['D'])
         return GAN(G, D,
                    config['z_shape'],
-                   config['num_gen_conditional'],
-                   config['num_dis_conditional'],
-                   config['num_both_conditional'])
+                   config['gen_conditionals'],
+                   config['dis_conditionals'],
+                   config['both_conditionals'])
 
     def get_config(self, verbose=0):
         g_config = self.G.get_config(verbose)
@@ -346,9 +350,9 @@ class GAN(AbstractModel):
             'G': g_config,
             'D': d_config,
             'z_shape': self.z_shape,
-            'num_gen_conditional': self.num_gen_conditional,
-            'num_dis_conditional': self.num_dis_conditional,
-            'num_both_conditional': self.num_both_conditional,
+            'gen_conditionals': self.gen_conditionals,
+            'dis_conditionals': self.dis_conditionals,
+            'both_conditionals': self.both_conditionals,
         }
 
     def save(self, directory, overwrite=False):

@@ -178,7 +178,7 @@ def test_gan_graph():
     d1.add(Dense(1, input_dim=20, activation='sigmoid'))
 
     z_shape = (1, 1, 8, 8)
-    gan = GAN(g1, d1, z_shape, num_gen_conditional=1)
+    gan = GAN(g1, d1, z_shape, gen_conditionals=[z_shape])
     gan.compile('adam', 'adam')
     gan.generate(conditionals=[np.zeros(z_shape)])
 
@@ -202,7 +202,8 @@ def test_gan_l2_regularizer():
 
 def test_conditional_conv_gan():
     g1 = Sequential()
-    g1.add(Convolution2D(10, 2, 2, activation='relu', border_mode='same', input_shape=(2, 8, 8)))
+    g1.add(Convolution2D(10, 2, 2, activation='relu', border_mode='same',
+                         input_shape=(2, 8, 8)))
     g1.add(UpSampling2D((2, 2)))
     g1.add(Convolution2D(1, 2, 2, activation='sigmoid', border_mode='same'))
 
@@ -215,6 +216,6 @@ def test_conditional_conv_gan():
     d1.add(Dropout(0.5))
     d1.add(Dense(1, activation='sigmoid'))
     z_shape = (1, 1, 8, 8)
-    gan = GAN(g1, d1, z_shape, num_gen_conditional=1)
+    gan = GAN(g1, d1, z_shape, gen_conditionals=[(z_shape)])
     gan.compile('adam', 'adam')
     gan.generate(conditionals=[np.zeros(z_shape)])
