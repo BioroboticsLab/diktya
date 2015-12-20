@@ -70,13 +70,19 @@ class GAN(AbstractModel):
 
     def __init__(self, generator, discremenator, z_shape,
                  gen_conditionals=None, dis_conditionals=None,
-                 both_conditionals=None):
+                 both_conditionals=None, reconstruction_fn=None,
+                 additonal_inputs=None):
         self.G = generator
         self.D = discremenator
 
         self.dis_conditionals = [] if dis_conditionals is None else dis_conditionals
         self.gen_conditionals = [] if gen_conditionals is None else gen_conditionals
         self.both_conditionals = [] if both_conditionals is None else both_conditionals
+
+        if reconstruction_fn is None:
+            reconstruction_fn = lambda x: x
+        self.reconstruction_fn = reconstruction_fn
+        self.additional_inputs = [] if additonal_inputs is None else additonal_inputs
         self.rs = T_random.RandomStreams(1334)
         self.z_label = "z"
         self.z_shape = z_shape
@@ -178,7 +184,8 @@ class GAN(AbstractModel):
              for c in self.dis_conditionals]
         z = self._get_z(z)
         g_out = self._get_gen_output(gen_conditional + both_conditional, z)
-        d_out = self._get_dis_output(g_out, real,
+        g_reconstruct = self.reconstruction_fn(g_out)
+        d_out = self._get_dis_output(g_reconstruct, real,
                                      dis_conditional + both_conditional)
 
         g_loss, d_loss, d_loss_real, d_loss_gen = self.losses(d_out)
@@ -200,6 +207,13 @@ class GAN(AbstractModel):
             raise ValueError("Cannot get regulizer for value `{}`"
                              .format(regulizer))
 
+    def cond_and_additional_inputs(self, v_map, network_type=None):
+        inputs = v_map.gen_conditional + v_map.both_conditional
+        if network_type == "generator":
+            return inputs + self.additional_inputs
+        else:
+            return inputs + v_map.dis_conditional + self.additional_inputs
+
     def build_regulizer(self, v_loss_map, gan_regulizer=None):
         v = v_loss_map
         gan_regulizer = self._get_regulizer(gan_regulizer)
@@ -220,7 +234,6 @@ class GAN(AbstractModel):
 
     def build_opt(self, optimizer_g, optimizer_d, gan_regulizer=None,
                   z_type='random'):
-
         v = self.build_loss(z_type)
         self.build_regulizer(v, gan_regulizer)
         self.build_opt_d(optimizer_d, v)
@@ -228,26 +241,27 @@ class GAN(AbstractModel):
         return v
 
     def _compile_generate(self, v, mode=None):
-        conditionals = v.gen_conditional + v.both_conditional
+        add_inputs = self.cond_and_additional_inputs(v, "generator")
         self._generate = theano.function(
-                [v.placeholder_z] + conditionals,
-                [v.g_out],
+                [v.placeholder_z] + add_inputs,
+                [v.g_reconstruct],
                 allow_input_downcast=True,
                 mode=mode, givens=v.replace_z)
 
     def _compile_debug(self, v, mode=None):
-        conditionals = v.gen_conditional + v.dis_conditional + v.both_conditional
+        add_inputs = self.cond_and_additional_inputs(v)
         self._debug = theano.function(
-                [v.real, v.placeholder_z] + conditionals,
-                [v.g_out, v.real, v.d_loss, v.d_loss_real, v.d_loss_gen,
+                [v.real, v.placeholder_z] + add_inputs,
+                [v.g_out, v.g_reconstruct, v.real, v.d_loss, v.d_loss_real,
+                 v.d_loss_gen,
                  v.g_loss],
                 allow_input_downcast=True, mode=mode, givens=v.replace_z)
 
     def compile(self, optimizer_g, optimizer_d, gan_regulizer=None, mode=None):
         v = self.build_opt(optimizer_g, optimizer_d, gan_regulizer)
-        conditionals = v.gen_conditional + v.dis_conditional + v.both_conditional
+        add_inputs = self.cond_and_additional_inputs(v)
         self._train = theano.function(
-                [v.real] + conditionals,
+                [v.real] + add_inputs,
                 [v.d_loss, v.d_loss_real, v.d_loss_gen, v.g_loss],
                 updates=v.d_updates + v.g_updates + v.reg_updates,
                 allow_input_downcast=True, mode=mode)
@@ -265,9 +279,9 @@ class GAN(AbstractModel):
         v.image_updates = optimizer.get_updates([v.z], self.D.constraints,
                                                 v.image_loss)
 
-        conditionals = v.gen_conditional + v.both_conditional
+        add_inputs = self.cond_and_additional_inputs(v, "generator")
         self._optimize_image_fn = theano.function(
-                [out_expected] + conditionals, [v.image_loss],
+                [out_expected] + add_inputs, [v.image_loss],
                 updates=v.image_updates, allow_input_downcast=True, mode=mode)
 
         self._compile_generate(v, mode)
@@ -302,22 +316,22 @@ class GAN(AbstractModel):
                   callbacks=callbacks, shuffle=False, metrics=labels)
         return self.generate(z.get_value()), z.get_value()
 
-    def fit(self, X, gen_conditional=None, dis_conditional=None,
+    def fit(self, X, conditonal_inputs=None, addtional_inputs=None,
             nb_epoch=100, verbose=0,
             callbacks=None, shuffle=True):
         if callbacks is None:
             callbacks = []
-        if gen_conditional is None:
-            gen_conditional = []
-        if dis_conditional is None:
-            dis_conditional = []
+        if conditonal_inputs is None:
+            conditonal_inputs = []
+        if addtional_inputs is None:
+            addtional_inputs = []
         labels = ['d_loss', 'd_real', 'd_gen', 'g_loss']
 
         def train(model, batch_ids, batch_index, batch_logs=None):
             if batch_logs is None:
                 batch_logs = {}
             ins = [X[batch_ids]]
-            for c in gen_conditional + dis_conditional:
+            for c in conditonal_inputs + addtional_inputs:
                 ins.append(c[batch_ids])
             outs = self._train(*ins)
             for key, value in zip(labels, outs):
@@ -389,7 +403,8 @@ class GAN(AbstractModel):
     def debug(self, X, z=None, *conditionals):
         if z is None:
             z = self._uniform_z()
-        labels = ['fake', 'real', 'd_loss', 'd_real', 'd_gen', 'g_loss']
+        labels = ['fake_raw', 'fake_reconstruct', 'real', 'd_loss', 'd_real',
+                  'd_gen', 'g_loss']
         ins = [X, z] + list(conditionals)
         outs = self._debug(*ins)
         return DotMap(dict(zip(labels, outs)))
