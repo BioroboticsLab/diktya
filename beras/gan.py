@@ -37,8 +37,6 @@ _rs = T_random.RandomStreams(1334)
 
 
 class GAN(AbstractModel):
-    ndim = 4
-
     class Regularizer(object):
         def get_losses(self, gan, g_loss, d_loss):
             updates = []
@@ -189,67 +187,88 @@ class GAN(AbstractModel):
         replace_z = [(z, placeholder_z)]
         return DotMap(locals())
 
-    def build_opt(self, optimizer_g, optimizer_d, gan_regulizer=None,
-                  ndim_gen_out=4, z_type='random'):
-        if gan_regulizer is None:
-            gan_regulizer = GAN.Regularizer()
-        elif gan_regulizer == 'l2':
-            gan_regulizer = GAN.L2Regularizer()
+    def _get_regulizer(self, regulizer=None):
+        if regulizer is None:
+            return GAN.Regularizer()
+        elif regulizer == 'l2':
+            return GAN.L2Regularizer()
+        elif issubclass(type(regulizer), GAN.Regularizer):
+            return regulizer
+        elif type(regulizer) == GAN.Regularizer:
+            return regulizer
+        else:
+            raise ValueError("Cannot get regulizer for value `{}`"
+                             .format(regulizer))
 
-        v = self.build_loss(ndim_gen_out, z_type)
-        optimizer_g = optimizers.get(optimizer_g)
-        optimizer_d = optimizers.get(optimizer_d)
-        g_updates = optimizer_g.get_updates(
-            self.G.params, self.G.constraints, v.g_loss)
-        d_updates = optimizer_d.get_updates(
-            self.D.params, self.D.constraints, v.d_loss)
-        g_loss, d_loss, reg_updates = gan_regulizer.get_losses(
-            self, v.g_loss, v.d_loss)
-        map = DotMap(locals())
-        map.update(v)
-        del map['v']
-        assert 'd_updates' in map
-        return map
+    def build_regulizer(self, v_loss_map, gan_regulizer=None):
+        v = v_loss_map
+        gan_regulizer = self._get_regulizer(gan_regulizer)
+        v.g_loss, v.d_loss, v.reg_updates = gan_regulizer.get_losses(
+                self, v.g_loss, v.d_loss)
+
+    def build_opt_g(self, optimizer, v_loss_map):
+        v = v_loss_map
+        optimizer = optimizers.get(optimizer)
+        v.g_updates = optimizer.get_updates(
+                self.G.params, self.G.constraints, v.g_loss)
+
+    def build_opt_d(self, optimizer, v_loss_map):
+        v = v_loss_map
+        optimizer = optimizers.get(optimizer)
+        v.d_updates = optimizer.get_updates(
+                self.D.params, self.D.constraints, v.d_loss)
+
+    def build_opt(self, optimizer_g, optimizer_d, gan_regulizer=None,
+                  z_type='random'):
+
+        v = self.build_loss(z_type)
+        self.build_regulizer(v, gan_regulizer)
+        self.build_opt_d(optimizer_d, v)
+        self.build_opt_g(optimizer_g, v)
+        return v
 
     def _compile_generate(self, v, mode=None):
         conditionals = v.gen_conditional + v.both_conditional
         self._generate = theano.function(
-            [v.placeholder_z] + conditionals,
-            [v.g_out],
-            allow_input_downcast=True,
-            mode=mode, givens=v.replace_z)
+                [v.placeholder_z] + conditionals,
+                [v.g_out],
+                allow_input_downcast=True,
+                mode=mode, givens=v.replace_z)
 
     def _compile_debug(self, v, mode=None):
         conditionals = v.gen_conditional + v.dis_conditional + v.both_conditional
         self._debug = theano.function(
-            [v.real, v.placeholder_z] + conditionals,
-            [v.g_out, v.real, v.d_loss, v.d_loss_real, v.d_loss_gen, v.g_loss],
-            allow_input_downcast=True, mode=mode, givens=v.replace_z)
+                [v.real, v.placeholder_z] + conditionals,
+                [v.g_out, v.real, v.d_loss, v.d_loss_real, v.d_loss_gen,
+                 v.g_loss],
+                allow_input_downcast=True, mode=mode, givens=v.replace_z)
 
-    def compile(self, optimizer_g, optimizer_d, gan_regulizer=None, mode=None, ndim_gen_out=4):
-        v = self.build_opt(optimizer_g, optimizer_d, gan_regulizer, ndim_gen_out)
+    def compile(self, optimizer_g, optimizer_d, gan_regulizer=None, mode=None):
+        v = self.build_opt(optimizer_g, optimizer_d, gan_regulizer)
         conditionals = v.gen_conditional + v.dis_conditional + v.both_conditional
         self._train = theano.function(
-            [v.real] + conditionals,
-            [v.d_loss, v.d_loss_real, v.d_loss_gen, v.g_loss],
-            updates=v.d_updates + v.g_updates + v.reg_updates,
-            allow_input_downcast=True, mode=mode)
+                [v.real] + conditionals,
+                [v.d_loss, v.d_loss_real, v.d_loss_gen, v.g_loss],
+                updates=v.d_updates + v.g_updates + v.reg_updates,
+                allow_input_downcast=True, mode=mode)
 
         self._compile_generate(v, mode)
         self._compile_debug(v, mode)
 
-    def compile_optimize_image(self, optimizer, image_loss_fn, ndim_expected=4, mode=None):
-        v = self.build_loss(ndim_gen_out=ndim_expected, z='shared')
+    def compile_optimize_image(self, optimizer, image_loss_fn, ndim_expected=4,
+                               mode=None):
+        v = self.build_loss(z='shared')
         optimizer = optimizers.get(optimizer)
         self.build_image_loss_vars = v
         out_expected = K.placeholder(ndim=ndim_expected)
         v.image_loss = image_loss_fn(out_expected, v.g_out)
-        v.image_updates = optimizer.get_updates([v.z], self.D.constraints, v.image_loss)
+        v.image_updates = optimizer.get_updates([v.z], self.D.constraints,
+                                                v.image_loss)
 
         conditionals = v.gen_conditional + v.both_conditional
         self._optimize_image_fn = theano.function(
-            [out_expected] + conditionals, [v.image_loss],
-            updates=v.image_updates, allow_input_downcast=True, mode=mode)
+                [out_expected] + conditionals, [v.image_loss],
+                updates=v.image_updates, allow_input_downcast=True, mode=mode)
 
         self._compile_generate(v, mode)
         self._compile_debug(v, mode)

@@ -23,7 +23,7 @@ from dotmap import DotMap
 from keras.callbacks import ModelCheckpoint
 import keras.initializations
 from keras.layers.convolutional import Convolution2D, MaxPooling2D, UpSampling2D
-from keras.layers.core import Dense, Dropout, MaxoutDense, Flatten
+from keras.layers.core import Dense, Dropout, Flatten
 
 from keras.models import Sequential, Graph
 import math
@@ -108,7 +108,7 @@ def test_gan_learn_simple_distribution():
 
     for r in (GAN.Regularizer(), GAN.Regularizer()):
         gan = simple_gan()
-        gan.compile('adam', 'adam', ndim_gen_out=2, gan_regulizer=r)
+        gan.compile('adam', 'adam', gan_regulizer=r)
         callbacks = [LossPrinter()]
         if visual_debug:
             callbacks.append(Plotter(X, TEST_OUTPUT_DIR + "/epoches_plot"))
@@ -117,8 +117,8 @@ def test_gan_learn_simple_distribution():
 
 @pytest.mark.skipif(reason="No multiple comiples #1")
 def test_gan_multiple_compiles(simple_gan):
-    simple_gan.compile('adam', 'adam', ndim_gen_out=2)
-    simple_gan.compile('adam', 'adam', ndim_gen_out=2)
+    simple_gan.compile('adam', 'adam')
+    simple_gan.compile('adam', 'adam')
 
 
 def test_gan_save_load(simple_gan):
@@ -145,7 +145,7 @@ def test_gan_optimize_image(simple_gan):
 
 
 def test_gan_utility_funcs(simple_gan: GAN):
-    simple_gan.compile('adam', 'adam', ndim_gen_out=2)
+    simple_gan.compile('adam', 'adam')
     xy_shp = simple_gan.z_shape[1:]
     x = np.zeros(xy_shp, dtype=np.float32)
     y = np.zeros(xy_shp, dtype=np.float32)
