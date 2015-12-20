@@ -58,10 +58,10 @@ class GAN(AbstractModel):
             delta = np.cast['float32'](1e-5)
             small_delta = np.cast['float32'](1e-7)
             delta_l2 = ifelse(g_loss > self.high,
-                            delta,
-                            ifelse(g_loss < self.low,
-                                   -delta,
-                                   -small_delta))
+                              delta,
+                              ifelse(g_loss < self.low,
+                                     -delta,
+                                     -small_delta))
 
             new_l2 = T.maximum(self.l2_coef + delta_l2, 0.)
             updates = [(self.l2_coef, new_l2)]
@@ -297,7 +297,7 @@ class GAN(AbstractModel):
                 batch_logs[key] = value
 
         assert self.batch_size % 2 == 0, "batch_size must be multiple of two."
-        self._fit(optimize, self.batch_size*nb_iterations,
+        self._fit(optimize, self.batch_size * nb_iterations,
                   batch_size=self.batch_size, nb_epoch=1, verbose=verbose,
                   callbacks=callbacks, shuffle=False, metrics=labels)
         return self.generate(z.get_value()), z.get_value()
@@ -398,7 +398,7 @@ class GAN(AbstractModel):
         z = np.zeros(self.z_shape)
         n = len(z)
         for i in range(n):
-            z[i] = x + i/n * (y - x)
+            z[i] = x + i / n * (y - x)
         real = np.zeros(self.g_output_shape())
         outs = self.debug(real, z)
         return outs.fake
@@ -434,4 +434,4 @@ class GAN(AbstractModel):
         return self.z_shape[0]
 
     def g_output_shape(self):
-        return (self.batch_size, ) + self.G.output_shape[1:]
+        return (self.batch_size,) + self.G.output_shape[1:]
