@@ -15,6 +15,8 @@ import shutil
 import tempfile
 
 from keras.backend.common import cast_to_floatx
+
+from beras.models import asgraph
 from tests import visual_debug, TEST_OUTPUT_DIR
 import os
 import keras
@@ -88,10 +90,11 @@ def simple_gan():
                         input_dim=simple_gan_nb_z))
     generator.add(Dense(simple_gan_nb_z, activation='relu'))
     generator.add(Dense(simple_gan_nb_out, activation='sigmoid'))
-
+    generator = asgraph(generator, input_name=GAN.z_name)
     discriminator = Sequential()
     discriminator.add(Dense(20, activation='relu', input_dim=2))
     discriminator.add(Dense(1, activation='sigmoid'))
+    discriminator = asgraph(discriminator, input_name=GAN.d_input)
     return GAN(generator, discriminator, simple_gan_z_shape)
 
 
@@ -167,18 +170,18 @@ def test_gan_utility_funcs(simple_gan: GAN):
 def test_gan_graph():
     g1 = Graph()
     g1.add_input("z", (1, 8, 8))
-    g1.add_input("cond_0", (1, 8, 8))
+    g1.add_input("cond", (1, 8, 8))
     g1.add_node(Convolution2D(10, 2, 2, activation='relu', border_mode='same'),
-                name="conv", inputs=['z', 'cond_0'], concat_axis=1)
+                name="conv", inputs=['z', 'cond'], concat_axis=1)
     g1.add_output("output", input='conv')
 
     d1 = Sequential()
     d1.add(Convolution2D(5, 2, 2, activation='relu', input_shape=(1, 8, 8)))
     d1.add(Flatten())
     d1.add(Dense(1, input_dim=20, activation='sigmoid'))
-
+    d1 = asgraph(d1, input_name=GAN.d_input)
     z_shape = (1, 1, 8, 8)
-    gan = GAN(g1, d1, z_shape, gen_conditionals=[z_shape])
+    gan = GAN(g1, d1, z_shape)
     gan.compile('adam', 'adam')
     gan.generate(conditionals=[np.zeros(z_shape)])
 
@@ -201,21 +204,24 @@ def test_gan_l2_regularizer():
 
 
 def test_conditional_conv_gan():
+    z_shape = (1, 1, 8, 8)
     g1 = Sequential()
     g1.add(Convolution2D(10, 2, 2, activation='relu', border_mode='same',
                          input_shape=(2, 8, 8)))
     g1.add(UpSampling2D((2, 2)))
     g1.add(Convolution2D(1, 2, 2, activation='sigmoid', border_mode='same'))
+    g1 = asgraph(g1, inputs={"z": z_shape[1:], "cond": z_shape[1:]},
+                 concat_axis=1)
 
     d1 = Sequential()
-    d1.add(Convolution2D(5, 2, 2, activation='relu', input_shape=(1, 8, 8)))
+    d1.add(Convolution2D(5, 2, 2, activation='relu', input_shape=z_shape[1:]))
     d1.add(MaxPooling2D())
     d1.add(Dropout(0.5))
     d1.add(Flatten())
     d1.add(Dense(10, activation='relu'))
     d1.add(Dropout(0.5))
     d1.add(Dense(1, activation='sigmoid'))
-    z_shape = (1, 1, 8, 8)
-    gan = GAN(g1, d1, z_shape, gen_conditionals=[(z_shape)])
+    d1 = asgraph(d1, input_name=GAN.d_input)
+    gan = GAN(g1, d1, z_shape)
     gan.compile('adam', 'adam')
     gan.generate(conditionals=[np.zeros(z_shape)])

@@ -11,15 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import inspect
+
 import json
 import os
 
-import pytest
 from dotmap import DotMap
-from keras.objectives import mse, binary_crossentropy
+from keras.objectives import binary_crossentropy
 import keras.backend as K
-from keras.backend.common import cast_to_floatx, floatx
+from keras.backend.common import cast_to_floatx
 
 import theano
 import theano.tensor.shared_randomstreams as T_random
@@ -31,12 +30,16 @@ from keras.models import Sequential, standardize_X, Graph, model_from_json, \
 from keras import optimizers
 from theano.tensor.type import TensorType
 
-from beras.models import AbstractModel
+from beras.models import AbstractModel, asgraph
 
 _rs = T_random.RandomStreams(1334)
 
 
 class GAN(AbstractModel):
+    z_name = "z"
+    g_out_name = "g_out"
+    d_input = 'd_input'
+
     class Regularizer(object):
         def get_losses(self, gan, g_loss, d_loss):
             updates = []
@@ -68,25 +71,28 @@ class GAN(AbstractModel):
             d_loss = self._apply_l2_regulizer(gan.D.params, d_loss)
             return g_loss, d_loss, updates
 
-    def __init__(self, generator, discremenator, z_shape,
-                 gen_conditionals=None, dis_conditionals=None,
-                 both_conditionals=None, reconstruction_fn=None,
-                 additonal_inputs=None):
-        self.G = generator
-        self.D = discremenator
-
-        self.dis_conditionals = [] if dis_conditionals is None else dis_conditionals
-        self.gen_conditionals = [] if gen_conditionals is None else gen_conditionals
-        self.both_conditionals = [] if both_conditionals is None else both_conditionals
-
-        if reconstruction_fn is None:
-            reconstruction_fn = lambda x: x
-        self.reconstruction_fn = reconstruction_fn
-        self.additional_inputs = [] if additonal_inputs is None else additonal_inputs
+    def __init__(self, generator: Graph, discremenator: Graph, z_shape,
+                 reconstruct_fn=None):
+        """
+        :param generator: Generator network. A keras Graph or Sequential model
+        :param discremenator: Discriminator network. A keras Graph or
+        Sequential model
+        :param z_shape: Shape of the random z vector.
+        :return:
+        """
         self.rs = T_random.RandomStreams(1334)
-        self.z_label = "z"
         self.z_shape = z_shape
-        self.ndim_gen_out = len(self.G.output_shape)
+        self.G = generator
+        self.generator_conds = list(filter(lambda k: k != self.z_name,
+                                           self.G.inputs.keys()))
+        self.D = discremenator
+        self.discriminator_conds = list(filter(lambda k: k != self.d_input,
+                                               self.D.inputs.keys()))
+        self.conditionals = list(set(self.discriminator_conds).union(
+                set(self.generator_conds)))
+        if reconstruct_fn is None:
+            reconstruct_fn = lambda g_outmap: g_outmap["output"]
+        self.reconstruct_fn = reconstruct_fn
 
     @property
     def batch_size(self):
@@ -109,14 +115,6 @@ class GAN(AbstractModel):
         else:
             ValueError("model must be either Graph of Sequential")
 
-    @staticmethod
-    def _get_output(model, train=True):
-        out = model.get_output(train)
-        if type(out) == dict:
-            return out["output"]
-        else:
-            return out
-
     def _random_z(self):
         return self.rs.uniform(self.z_shape, -1, 1)
 
@@ -134,22 +132,23 @@ class GAN(AbstractModel):
             raise ValueError("must be either `random` or `shared`, "
                              "got: {}".format(z_type))
 
-    def _get_gen_output(self, gen_conditional, z, train=True):
-        gen_conditional = standardize_X(gen_conditional)
-        self._set_input(self.G, [z] + gen_conditional,
-                        [self.z_label] + ["cond_{}".format(i)
-                                          for i in range(len(gen_conditional))])
-        return self._get_output(self.G, train)
+    def _get_gen_output(self, conditionals, labels, z, train=True):
+        self._set_input(self.G, [z] + conditionals,
+                        [self.z_name] + labels)
+        out = self.G.get_output(train)
+        if type(out) is not dict:
+            out = {"output": out}
+        return out
 
-    def _get_dis_output(self, fake, real, dis_conditional, train=True):
-        dis_conditional = standardize_X(dis_conditional)
+    def _get_dis_output(self, fake, real,
+                        conditionals, labels, train=True):
         d_in = T.concatenate([fake, real], axis=0)
-        self._set_input(self.D, [d_in] + dis_conditional,
-                        ["input"] +
-                        ["cond_{}".format(i)
-                         for i in range(len(dis_conditional))])
-        assert self.D.layers[0].input == d_in
-        return self._get_output(self.D, train)
+        self._set_input(self.D, [d_in] + conditionals,
+                        [GAN.d_input] + labels)
+        out = self.D.get_output(train)
+        if type(out) is not dict:
+            out = {"output": out}
+        return out
 
     def losses(self, d_out, objective=binary_crossentropy):
         d_out_given_fake = d_out[:self.batch_size // 2]
@@ -171,30 +170,39 @@ class GAN(AbstractModel):
         else:
             return TensorType(x.dtype, x.broadcastable)()
 
-    def build_loss(self, z='random'):
-        real = K.placeholder(ndim=self.ndim_gen_out, name="real")
-        gen_conditional = \
-            [K.placeholder(c, name="gen_conditional_{}".format(c))
-             for c in self.gen_conditionals]
-        both_conditional = \
-            [K.placeholder(c, name="both_conditional_{}".format(c))
-             for c in self.both_conditionals]
-        dis_conditional = \
-            [K.placeholder(c, name="dis_conditional_{}".format(c))
-             for c in self.dis_conditionals]
-        z = self._get_z(z)
-        g_out = self._get_gen_output(gen_conditional + both_conditional, z)
-        g_reconstruct = self.reconstruction_fn(g_out)
-        d_out = self._get_dis_output(g_reconstruct, real,
-                                     dis_conditional + both_conditional)
+    def build_loss(self, z='random', objective=binary_crossentropy):
+        conditionals = []
+        for c in self.conditionals:
+            if c in self.G.inputs:
+                shape = self.G.inputs[c].input_shape
+            else:
+                assert c in self.D.inputs
+                shape = self.D.inputs[c].input_shape
+            conditionals.append(K.placeholder(shape=shape, name=c))
 
-        g_loss, d_loss, d_loss_real, d_loss_gen = self.losses(d_out)
+        gen_conditionals = [
+            c for n, c in zip(self.conditionals, conditionals)
+            if n in self.generator_conds]
+        dis_conditionals = [
+            c for n, c in zip(self.conditionals, conditionals)
+            if n in self.discriminator_conds]
+        z = self._get_z(z)
+        g_outmap = self._get_gen_output(gen_conditionals,
+                                        self.generator_conds, z)
+        g_out = g_outmap["output"]
+        fake = self.reconstruct_fn(g_outmap)
+        real = K.placeholder(ndim=fake.ndim, name="real")
+        d_outmap = self._get_dis_output(fake, real, dis_conditionals,
+                                        self.discriminator_conds)
+        d_out = d_outmap["output"]
+        g_loss, d_loss, d_loss_real, d_loss_gen = self.losses(d_out, objective)
 
         placeholder_z = self._placeholder(z)
         replace_z = [(z, placeholder_z)]
         return DotMap(locals())
 
-    def _get_regulizer(self, regulizer=None):
+    @staticmethod
+    def get_regulizer(self, regulizer=None) -> Regularizer:
         if regulizer is None:
             return GAN.Regularizer()
         elif regulizer == 'l2':
@@ -207,16 +215,9 @@ class GAN(AbstractModel):
             raise ValueError("Cannot get regulizer for value `{}`"
                              .format(regulizer))
 
-    def cond_and_additional_inputs(self, v_map, network_type=None):
-        inputs = v_map.gen_conditional + v_map.both_conditional
-        if network_type == "generator":
-            return inputs + self.additional_inputs
-        else:
-            return inputs + v_map.dis_conditional + self.additional_inputs
-
     def build_regulizer(self, v_loss_map, gan_regulizer=None):
         v = v_loss_map
-        gan_regulizer = self._get_regulizer(gan_regulizer)
+        gan_regulizer = self.get_regulizer(gan_regulizer)
         v.g_loss, v.d_loss, v.reg_updates = gan_regulizer.get_losses(
                 self, v.g_loss, v.d_loss)
 
@@ -241,27 +242,25 @@ class GAN(AbstractModel):
         return v
 
     def _compile_generate(self, v, mode=None):
-        add_inputs = self.cond_and_additional_inputs(v, "generator")
+        add_inputs = v.gen_conditionals
         self._generate = theano.function(
                 [v.placeholder_z] + add_inputs,
-                [v.g_reconstruct],
+                [v.fake],
                 allow_input_downcast=True,
                 mode=mode, givens=v.replace_z)
 
     def _compile_debug(self, v, mode=None):
-        add_inputs = self.cond_and_additional_inputs(v)
         self._debug = theano.function(
-                [v.real, v.placeholder_z] + add_inputs,
-                [v.g_out, v.g_reconstruct, v.real, v.d_loss, v.d_loss_real,
+                [v.real, v.placeholder_z] + v.conditionals,
+                [v.g_out, v.fake, v.real, v.d_loss, v.d_loss_real,
                  v.d_loss_gen,
                  v.g_loss],
                 allow_input_downcast=True, mode=mode, givens=v.replace_z)
 
     def compile(self, optimizer_g, optimizer_d, gan_regulizer=None, mode=None):
         v = self.build_opt(optimizer_g, optimizer_d, gan_regulizer)
-        add_inputs = self.cond_and_additional_inputs(v)
         self._train = theano.function(
-                [v.real] + add_inputs,
+                [v.real] + v.conditionals,
                 [v.d_loss, v.d_loss_real, v.d_loss_gen, v.g_loss],
                 updates=v.d_updates + v.g_updates + v.reg_updates,
                 allow_input_downcast=True, mode=mode)
@@ -279,9 +278,8 @@ class GAN(AbstractModel):
         v.image_updates = optimizer.get_updates([v.z], self.D.constraints,
                                                 v.image_loss)
 
-        add_inputs = self.cond_and_additional_inputs(v, "generator")
         self._optimize_image_fn = theano.function(
-                [out_expected] + add_inputs, [v.image_loss],
+                [out_expected] + v.gen_conditionals, [v.image_loss],
                 updates=v.image_updates, allow_input_downcast=True, mode=mode)
 
         self._compile_generate(v, mode)
@@ -371,10 +369,7 @@ class GAN(AbstractModel):
         G = model_from_config(config['G'])
         D = model_from_config(config['D'])
         return GAN(G, D,
-                   config['z_shape'],
-                   config['gen_conditionals'],
-                   config['dis_conditionals'],
-                   config['both_conditionals'])
+                   config['z_shape'])
 
     def get_config(self, verbose=0):
         g_config = self.G.get_config(verbose)
@@ -383,9 +378,6 @@ class GAN(AbstractModel):
             'G': g_config,
             'D': d_config,
             'z_shape': self.z_shape,
-            'gen_conditionals': self.gen_conditionals,
-            'dis_conditionals': self.dis_conditionals,
-            'both_conditionals': self.both_conditionals,
         }
 
     def save(self, directory, overwrite=False):
@@ -403,7 +395,7 @@ class GAN(AbstractModel):
     def debug(self, X, z=None, *conditionals):
         if z is None:
             z = self._uniform_z()
-        labels = ['fake_raw', 'fake_reconstruct', 'real', 'd_loss', 'd_real',
+        labels = ['g_out', 'fake', 'real', 'd_loss', 'd_real',
                   'd_gen', 'g_loss']
         ins = [X, z] + list(conditionals)
         outs = self._debug(*ins)
