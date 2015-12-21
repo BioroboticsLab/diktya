@@ -15,6 +15,7 @@
 import json
 import os
 
+import keras
 from dotmap import DotMap
 from keras.objectives import binary_crossentropy
 import keras.backend as K
@@ -171,6 +172,7 @@ class GAN(AbstractModel):
             return TensorType(x.dtype, x.broadcastable)()
 
     def build_loss(self, z='random', objective=binary_crossentropy):
+        objective = keras.objectives.get(objective)
         conditionals = []
         for c in self.conditionals:
             if c in self.G.inputs:
