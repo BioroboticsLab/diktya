@@ -14,13 +14,44 @@
 
 from __future__ import absolute_import
 from __future__ import print_function
-from keras.models import batch_shuffle, slice_X, get_function_name
+from keras.models import batch_shuffle, slice_X, get_function_name, Sequential, \
+    Graph
 from keras.models import make_batches
 import numpy as np
 import pprint
 
 from keras import callbacks as cbks
 from keras.utils.generic_utils import Progbar
+
+
+def asgraph(model, input_name=None, inputs=None, output_label="output",
+            merge_mode='concat', concat_axis=-1) -> Graph:
+    """
+    From Sequential models make Graphs. Use full to write code that works with
+    both Graph and Seuential models.
+    :param model: Sequential of Graph model
+    :param input_label: The name of the input, only set if a Sequential model
+    is given
+    :param output_label: The name of the output, only set if a Sequential
+    model is given
+    :return: Graph
+    """
+    assert type(model) == Sequential or issubclass(type(model), Sequential)
+    if input_name is None:
+        input_name = "input"
+    if inputs is None:
+        inputs = {input_name: model.layers[0].input_shape[1:]}
+    g = Graph()
+    for name, shape in inputs.items():
+        g.add_input(name, shape)
+    inputs = list(inputs.keys())
+    if len(inputs) >= 2:
+        g.add_node(model, name="model", inputs=inputs,
+                   merge_mode='concat', concat_axis=concat_axis)
+    else:
+        g.add_node(model, name="model", input=inputs[0])
+    g.add_output(output_label, input="model")
+    return g
 
 
 class AbstractModel(object):
