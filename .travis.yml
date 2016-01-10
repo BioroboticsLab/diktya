@@ -11,7 +11,7 @@ install:
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
   - conda info -a
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib pytest h5py pillow scikit-image
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib pytest h5py pillow scikit-image pandas
   - source activate test-environment
   - pip install git+https://github.com/Theano/Theano.git#egg=theano
   - pip install git+https://github.com/EderSantana/seya.git@8567d2715706b94d72da4d6a3864aae094be3951#egg=seya
