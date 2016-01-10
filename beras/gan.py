@@ -22,18 +22,14 @@ import keras.backend as K
 from keras.backend.common import cast_to_floatx
 
 import theano
-import theano.tensor.shared_randomstreams as T_random
 import theano.tensor as T
 import numpy as np
 from theano.ifelse import ifelse
 from keras.models import Sequential, standardize_X, Graph, model_from_json, \
     model_from_config
 from keras import optimizers
-from theano.tensor.type import TensorType
 
 from beras.models import AbstractModel, asgraph
-
-_rs = T_random.RandomStreams(1334)
 
 
 class GAN(AbstractModel):
@@ -81,7 +77,6 @@ class GAN(AbstractModel):
         :param z_shape: Shape of the random z vector.
         :return:
         """
-        self.rs = T_random.RandomStreams(1334)
         self.z_shape = z_shape
         self.G = generator
         self.generator_conds = list(filter(lambda k: k != self.z_name,
@@ -104,7 +99,7 @@ class GAN(AbstractModel):
         if type(model) == Sequential:
             if type(inputs) == list or type(inputs) == tuple:
                 if len(inputs) != 1:
-                    input = T.concatenate(inputs, axis=1)
+                    input = K.concatenate(inputs, axis=1)
                 else:
                     input = inputs[0]
             else:
@@ -117,7 +112,7 @@ class GAN(AbstractModel):
             ValueError("model must be either Graph of Sequential")
 
     def _random_z(self):
-        return self.rs.uniform(self.z_shape, -1, 1)
+        return K.random_uniform(self.z_shape, -1, 1)
 
     def _shared_z(self):
         return theano.shared(cast_to_floatx(np.zeros(self.z_shape)))
@@ -169,7 +164,7 @@ class GAN(AbstractModel):
         if hasattr(x, 'get_value'):
             return K.placeholder(x.get_value().shape)
         else:
-            return TensorType(x.dtype, x.broadcastable)()
+            return K.placeholder(ndim=x.ndim)
 
     def build_loss(self, z='random', objective=binary_crossentropy):
         objective = keras.objectives.get(objective)
