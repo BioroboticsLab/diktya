@@ -161,12 +161,12 @@ class GAN(AbstractModel):
         return g_loss, d_loss, d_loss_real, d_loss_fake
 
     @staticmethod
-    def _placeholder(x):
+    def _placeholder(x, name=None):
         # if is shared value
         if hasattr(x, 'get_value'):
-            return K.placeholder(x.get_value().shape)
+            return K.placeholder(x.get_value().shape, name=name)
         else:
-            return K.placeholder(ndim=x.ndim)
+            return TensorType(x.dtype, x.broadcastable)()
 
     def build_loss(self, z='random', objective=binary_crossentropy):
         objective = keras.objectives.get(objective)
@@ -204,7 +204,7 @@ class GAN(AbstractModel):
         d_out = d_outmap["output"]
         g_loss, d_loss, d_loss_real, d_loss_gen = self.losses(d_out, objective)
 
-        placeholder_z = self._placeholder(z)
+        placeholder_z = self._placeholder(z, name="z_placeholder")
         replace_z = [(z, placeholder_z)]
         return DotMap(locals())
 
