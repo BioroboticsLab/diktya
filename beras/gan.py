@@ -14,7 +14,7 @@
 
 import json
 import os
-
+from collections import OrderedDict
 import keras
 from dotmap import DotMap
 from keras.objectives import binary_crossentropy
@@ -79,16 +79,21 @@ class GAN(AbstractModel):
         """
         self.z_shape = z_shape
         self.G = generator
-        self.generator_conds = list(filter(lambda k: k != self.z_name,
-                                           self.G.inputs.keys()))
+
+        def filter_conds(name, inputs):
+            return list(sorted(filter(lambda k: k != name, inputs.keys())))
+
+        self.generator_conds = filter_conds(self.z_name, self.G.inputs)
+
         self.D = discremenator
-        self.discriminator_conds = list(filter(lambda k: k != self.d_input,
-                                               self.D.inputs.keys()))
-        self.conditionals = list(set(self.discriminator_conds).union(
-                set(self.generator_conds)))
+        self.discriminator_conds = filter_conds(self.d_input, self.D.inputs)
+        conditional_joined = set(self.discriminator_conds).union(
+            set(self.generator_conds))
+        self.conditionals = list(sorted(conditional_joined))
         if reconstruct_fn is None:
-            reconstruct_fn = lambda g_outmap: g_outmap["output"]
-        self.reconstruct_fn = reconstruct_fn
+            self.reconstruct_fn = lambda g_outmap: g_outmap["output"]
+        else:
+            self.reconstruct_fn = reconstruct_fn
 
     @property
     def batch_size(self):
@@ -168,21 +173,29 @@ class GAN(AbstractModel):
 
     def build_loss(self, z='random', objective=binary_crossentropy):
         objective = keras.objectives.get(objective)
-        conditionals = []
+        conditional_dict = OrderedDict()
         for c in self.conditionals:
+            if c in self.G.inputs and c in self.D.inputs:
+                c_g = self.G.inputs[c]
+                c_d = self.D.inputs[c]
+                assert c_g.input_shape == c_d.input_shape, \
+                    "Got an input {} to the generator and discrimintor." \
+                    " But they have different shape." \
+                    " Got {} for the generator and {} for the discriminator." \
+                    .format(c, c_g.shape, c_d.shape)
+                shape = c_g.shape
             if c in self.G.inputs:
                 shape = self.G.inputs[c].input_shape
             else:
                 assert c in self.D.inputs
                 shape = self.D.inputs[c].input_shape
-            conditionals.append(K.placeholder(shape=shape, name=c))
+            conditional_dict[c] = K.placeholder(shape=shape, name=c)
 
-        gen_conditionals = [
-            c for n, c in zip(self.conditionals, conditionals)
-            if n in self.generator_conds]
-        dis_conditionals = [
-            c for n, c in zip(self.conditionals, conditionals)
-            if n in self.discriminator_conds]
+        conditionals = list(conditional_dict.values())
+        gen_conditionals = [conditional_dict[n] for n in self.generator_conds]
+        dis_conditionals = [conditional_dict[n]
+                            for n in self.discriminator_conds]
+
         z = self._get_z(z)
         g_outmap = self._get_gen_output(gen_conditionals,
                                         self.generator_conds, z)
@@ -255,7 +268,9 @@ class GAN(AbstractModel):
                 allow_input_downcast=True, mode=mode, givens=v.replace_z)
 
     def compile(self, optimizer_g, optimizer_d, gan_regulizer=None, mode=None):
+        import pytest
         v = self.build_opt(optimizer_g, optimizer_d, gan_regulizer)
+        # pytest.set_trace()
         self._train = theano.function(
                 [v.real] + v.conditionals,
                 [v.d_loss, v.d_loss_real, v.d_loss_gen, v.g_loss],
@@ -311,22 +326,22 @@ class GAN(AbstractModel):
                   callbacks=callbacks, shuffle=False, metrics=labels)
         return self.generate(z.get_value()), z.get_value()
 
-    def fit(self, X, conditonal_inputs=None, addtional_inputs=None,
-            nb_epoch=100, verbose=0,
+    def fit(self, X, conditional_inputs=None, nb_epoch=100, verbose=0,
             callbacks=None, shuffle=True):
         if callbacks is None:
             callbacks = []
-        if conditonal_inputs is None:
-            conditonal_inputs = []
-        if addtional_inputs is None:
-            addtional_inputs = []
+        conditionals = []
+        if conditional_inputs is not None:
+            for _, array in sorted(conditional_inputs.items()):
+                conditionals.append(array)
         labels = ['d_loss', 'd_real', 'd_gen', 'g_loss']
 
         def train(model, batch_ids, batch_index, batch_logs=None):
             if batch_logs is None:
                 batch_logs = {}
             ins = [X[batch_ids]]
-            for c in conditonal_inputs + addtional_inputs:
+            for c in conditionals:
+                print(batch_ids.shape)
                 ins.append(c[batch_ids])
             outs = self._train(*ins)
             for key, value in zip(labels, outs):
