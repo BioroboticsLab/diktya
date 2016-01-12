@@ -71,12 +71,14 @@ class GAN(AbstractModel):
     def __init__(self, generator: Graph, discremenator: Graph, z_shape,
                  reconstruct_fn=None):
         """
-        :param generator: Generator network. A keras Graph or Sequential model
-        :param discremenator: Discriminator network. A keras Graph or
-        Sequential model
+        :param generator: Generator network. A keras Graph  model
+        :param discremenator: Discriminator network. A keras Graph model
         :param z_shape: Shape of the random z vector.
         :return:
         """
+        assert type(generator) == Graph, "generator must be of type Graph"
+        assert type(discremenator) == Graph, \
+            "discremenator must be of type Graph"
         self.z_shape = z_shape
         self.G = generator
 
@@ -101,20 +103,16 @@ class GAN(AbstractModel):
 
     @staticmethod
     def _set_input(model, inputs, labels):
-        if type(model) == Sequential:
-            if type(inputs) == list or type(inputs) == tuple:
-                if len(inputs) != 1:
-                    input = K.concatenate(inputs, axis=1)
-                else:
-                    input = inputs[0]
-            else:
-                input = inputs
-            model.layers[0].input = input
-        elif type(model) == Graph:
+        assert len(inputs) == len(labels)
+        assert len(model.inputs) == len(inputs), \
+            "inputs do not match. Got {} and {}"\
+            .format(list(model.inputs.keys()), labels)
+        if len(inputs) == 1:
+            only_input = next(iter(model.inputs.values()))
+            only_input.input = inputs[0]
+        else:
             for label, input in zip(labels, inputs):
                 model.inputs[label].input = input
-        else:
-            ValueError("model must be either Graph of Sequential")
 
     def _random_z(self):
         return K.random_uniform(self.z_shape, -1, 1)
