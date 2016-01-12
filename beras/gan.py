@@ -131,9 +131,8 @@ class GAN(AbstractModel):
             raise ValueError("must be either `random` or `shared`, "
                              "got: {}".format(z_type))
 
-    def _get_gen_output(self, conditionals, labels, z, train=True):
-        self._set_input(self.G, [z] + conditionals,
-                        [self.z_name] + labels)
+    def _get_gen_output(self, z, conditionals, labels, train=True):
+        self._set_input(self.G, [z] + conditionals, [self.z_name] + labels)
         out = self.G.get_output(train)
         if type(out) is not dict:
             out = {"output": out}
@@ -195,8 +194,8 @@ class GAN(AbstractModel):
                             for n in self.discriminator_conds]
 
         z = self._get_z(z)
-        g_outmap = self._get_gen_output(gen_conditionals,
-                                        self.generator_conds, z)
+        g_outmap = self._get_gen_output(z, gen_conditionals,
+                                        self.generator_conds)
         g_out = g_outmap["output"]
         fake = self.reconstruct_fn(g_outmap)
         real = K.placeholder(ndim=fake.ndim, name="real")
