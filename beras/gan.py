@@ -249,9 +249,8 @@ class GAN(AbstractModel):
         return v
 
     def _compile_generate(self, v, mode=None):
-        add_inputs = v.gen_conditionals
         self._generate = theano.function(
-                [v.placeholder_z] + add_inputs,
+                [v.placeholder_z] + v.gen_conditionals,
                 [v.fake],
                 allow_input_downcast=True,
                 mode=mode, givens=v.replace_z)
