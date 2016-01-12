@@ -22,6 +22,7 @@ import keras.backend as K
 from keras.backend.common import cast_to_floatx
 
 import theano
+from theano.tensor import TensorType
 import theano.tensor as T
 import numpy as np
 from theano.ifelse import ifelse
