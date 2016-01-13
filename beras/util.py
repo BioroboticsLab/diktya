@@ -187,9 +187,12 @@ def downsample(input):
     return downsample_layer.get_output(train=False)
 
 
-def tile(tiles):
+def tile(tiles, columns_must_be_multiple_of=1):
     def calc_columns_rows(n):
         num_columns = int(ceil(sqrt(n)))
+        if num_columns % columns_must_be_multiple_of != 0:
+            num_columns += columns_must_be_multiple_of - \
+                num_columns % columns_must_be_multiple_of
         num_rows = int(ceil(n / float(num_columns)))
         return num_columns, num_rows
 

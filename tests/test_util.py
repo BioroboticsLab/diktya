@@ -130,10 +130,12 @@ def test_tile():
             image[c] = color[c]
         images.append(image)
 
-    tiled = tile(images)
+    number = 20
+    tiled = tile(images, columns_must_be_multiple_of=number)
 
     rows = tiled.shape[1] // height
     cols = tiled.shape[2] // width
+    assert cols % number == 0
     for r in range(rows):
         for c in range(cols):
             idx = cols*r + c
@@ -144,5 +146,9 @@ def test_tile():
                 np.testing.assert_allclose(subimage, images[idx])
 
     fig = plt.figure()
+    h_w_rgb = np.zeros((tiled.shape[1], tiled.shape[2], tiled.shape[0]))
+    for i in range(3):
+        h_w_rgb[:, :, i] = tiled[i]
+    plt.imshow(h_w_rgb)
     plt_save_and_maybe_show("test_tile.png")
     plt.close(fig)
