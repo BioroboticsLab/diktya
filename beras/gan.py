@@ -338,7 +338,6 @@ class GAN(AbstractModel):
                 batch_logs = {}
             ins = [X[batch_ids]]
             for c in conditionals:
-                print(batch_ids.shape)
                 ins.append(c[batch_ids])
             outs = self._train(*ins)
             for key, value in zip(labels, outs):
