@@ -298,7 +298,7 @@ class GAN(AbstractModel):
         return cast_to_floatx(np.random.uniform(-1, 1, self.z_shape))
 
     def optimize_image(self, expected_image, nb_iterations, z_start=None,
-                       callbacks=None, verbose=0, conditionals=[]):
+                       callbacks=None, verbose=0, conditionals=None):
         if z_start is None:
             z_start = self._uniform_z()
 
@@ -312,7 +312,7 @@ class GAN(AbstractModel):
             if batch_logs is None:
                 batch_logs = {}
 
-            ins = [expected_image] + conditionals
+            ins = [expected_image] + self._conditionals_to_list(conditionals)
             outs = self._optimize_image_fn(*ins)
             for key, value in zip(labels, outs):
                 batch_logs[key] = value
@@ -323,14 +323,25 @@ class GAN(AbstractModel):
                   callbacks=callbacks, shuffle=False, metrics=labels)
         return self.generate(z.get_value()), z.get_value()
 
+    def _conditionals_to_list(self, conds):
+        if conds is None:
+            return []
+        else:
+            l = []
+            for name, array in sorted(conds.items()):
+                if name not in self.conditionals:
+                    raise ValueError(
+                        "Expected conditionals to be one of {}, got {}"
+                        .format(",".join(self.conditionals), name))
+                l.append(array)
+            return l
+
     def fit(self, X, conditional_inputs=None, nb_epoch=100, verbose=0,
             callbacks=None, shuffle=True):
         if callbacks is None:
             callbacks = []
-        conditionals = []
-        if conditional_inputs is not None:
-            for _, array in sorted(conditional_inputs.items()):
-                conditionals.append(array)
+        conditionals = self._conditionals_to_list(conditional_inputs)
+
         labels = ['d_loss', 'd_real', 'd_gen', 'g_loss']
 
         def train(model, batch_ids, batch_index, batch_logs=None):
@@ -394,18 +405,18 @@ class GAN(AbstractModel):
             json.dump(self.get_config(), f)
         self.save_weights(self._weight_fname_tmpl(directory), overwrite)
 
-    def generate(self, z=None, conditionals=[]):
+    def generate(self, z=None, conditionals=None):
         if z is None:
             z = self._uniform_z()
-        ins = [z] + list(conditionals)
+        ins = [z] + self._conditionals_to_list(conditionals)
         return self._generate(*ins)[0]
 
-    def debug(self, X, z=None, *conditionals):
+    def debug(self, X, z=None, conditionals=None):
         if z is None:
             z = self._uniform_z()
         labels = ['g_out', 'fake', 'real', 'd_loss', 'd_real',
                   'd_gen', 'g_loss']
-        ins = [X, z] + list(conditionals)
+        ins = [X, z] + self._conditionals_to_list(conditionals)
         outs = self._debug(*ins)
         return DotMap(dict(zip(labels, outs)))
 

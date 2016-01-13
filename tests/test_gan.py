@@ -183,7 +183,7 @@ def test_gan_graph():
     z_shape = (1, 1, 8, 8)
     gan = GAN(g1, d1, z_shape)
     gan.compile('adam', 'adam')
-    gan.generate(conditionals=[np.zeros(z_shape)])
+    gan.generate(conditionals={'cond': np.zeros(z_shape)})
 
 
 def test_gan_l2_regularizer():
@@ -224,4 +224,4 @@ def test_conditional_conv_gan():
     d1 = asgraph(d1, input_name=GAN.d_input)
     gan = GAN(g1, d1, z_shape)
     gan.compile('adam', 'adam')
-    gan.generate(conditionals=[np.zeros(z_shape)])
+    gan.generate(conditionals={'cond': np.zeros(z_shape)})
