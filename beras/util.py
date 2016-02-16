@@ -25,6 +25,7 @@ import theano.tensor as T
 from keras.layers.core import Layer
 from keras.backend.common import cast_to_floatx, floatx
 from scipy.misc import imsave
+import skimage.filters
 
 
 class LossPrinter(Callback):
@@ -69,14 +70,15 @@ _gaussian_blur_kernel = np.asarray([[[
 ]]], dtype=floatx())
 
 
-def upsample(input):
+def upsample(input, nb_channels=1):
     if type(input) == list:
         assert len(input) == 1
         input = input[0]
 
-    upsample_layer = Convolution2D(1, 5, 5, border_mode='valid',
-                                   input_shape=(1, None, None))
+    upsample_layer = Convolution2D(nb_channels, 5, 5, border_mode='valid',
+                                   input_shape=(nb_channels, None, None))
     upsample_layer_weight = _gaussian_blur_kernel/64.
+    upsample_layer_weight = upsample_layer_weight.repeat(nb_channels, axis=1)
     upsample_layer.W = theano.shared(upsample_layer_weight)
     shp = input.shape
     upsampled = T.zeros((shp[0], shp[1], 2*shp[2], 2*shp[3]))
@@ -86,21 +88,29 @@ def upsample(input):
     return upsample_layer.get_output(train=False)
 
 
-def blur(input, sigma=2., add_border=True):
-    import skimage.filters
-    if type(input) == list:
-        assert len(input) == 1
-        input = input[0]
-
-    size = ceil(2*sigma+1)
+def gaussian_kernel(sigma, size=None, nb_channels=1):
+    assert sigma % 2 == 0
+    if size is None:
+        size = ceil(2*sigma+1)
     a = np.zeros((size, size))
     center = size // 2
     a[center, center] = 1
     gaussian_kernel = skimage.filters.gaussian_filter(a, sigma)
+    gaussian_kernel = gaussian_kernel / np.sum(gaussian_kernel)
     gaussian_kernel = gaussian_kernel[np.newaxis, np.newaxis]
+    gaussian_kernel = gaussian_kernel.repeat(nb_channels, axis=1)
+    return gaussian_kernel
+
+
+def blur(input, sigma=2., add_border=True, nb_channels=1):
+    if type(input) == list:
+        assert len(input) == 1
+        input = input[0]
+    kernel = gaussian_kernel(sigma, nb_channels=nb_channels)
+    size = kernel.shape[-1]
     if add_border:
         input = _add_virtual_border(input, filter_size=size)
-    blur_layer = Convolution2D(1, size, size, border_mode='valid',
+    blur_layer = Convolution2D(nb_channels, size, size, border_mode='valid',
                                input_shape=(1, None, None))
     blur_layer.W = theano.shared(cast_to_floatx(gaussian_kernel))
     blur_layer.input = input
@@ -172,15 +182,17 @@ def sobel(img):
     return conv_x.get_output(train=False), conv_y.get_output(train=False)
 
 
-def downsample(input):
+def downsample(input, nb_channels=1):
     if type(input) == list:
         assert len(input) == 1
         input = input[0]
 
-    downsample_layer = Convolution2D(1, 5, 5, subsample=(2, 2),
-                                      border_mode='valid',
-                                      input_shape=(1, None, None))
+    downsample_layer = Convolution2D(nb_channels, 5, 5, subsample=(2, 2),
+                                     border_mode='valid',
+                                     input_shape=(1, None, None))
     downsample_layer_weight = _gaussian_blur_kernel/256.
+    downsample_layer_weight = downsample_layer_weight \
+        .repeat(nb_channels, axis=1)
     downsample_layer.W = theano.shared(downsample_layer_weight)
     input = _add_virtual_border(input)
     downsample_layer.input = input
