@@ -180,7 +180,7 @@ class GAN(AbstractModel):
                     "Got an input {} to the generator and discrimintor." \
                     " But they have different shape." \
                     " Got {} for the generator and {} for the discriminator." \
-                    .format(c, c_g.shape, c_d.shape)
+                    .format(c, c_g.input_shape, c_d.input_shape)
                 shape = c_g.shape
             if c in self.G.inputs:
                 shape = self.G.inputs[c].input_shape
