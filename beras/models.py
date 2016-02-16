@@ -24,16 +24,14 @@ from keras import callbacks as cbks
 from keras.utils.generic_utils import Progbar
 
 
-def asgraph(model, input_name=None, inputs=None, output_label="output",
+def asgraph(model, input_name=None, inputs=None, output_name="output",
             merge_mode='concat', concat_axis=-1) -> Graph:
     """
     From Sequential models make Graphs. Use full to write code that works with
     both Graph and Seuential models.
     :param model: Sequential of Graph model
-    :param input_label: The name of the input, only set if a Sequential model
-    is given
-    :param output_label: The name of the output, only set if a Sequential
-    model is given
+    :param input_name: The name of the input
+    :param output_name: The name of the output
     :return: Graph
     """
     assert type(model) == Sequential or issubclass(type(model), Sequential)
@@ -50,7 +48,7 @@ def asgraph(model, input_name=None, inputs=None, output_label="output",
                    merge_mode='concat', concat_axis=concat_axis)
     else:
         g.add_node(model, name="model", input=inputs[0])
-    g.add_output(output_label, input="model")
+    g.add_output(output_name, input="model")
     return g
 
 
