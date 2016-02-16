@@ -261,7 +261,7 @@ class GAN(AbstractModel):
                 [v.real, v.placeholder_z] + v.conditionals,
                 [v.g_out, v.fake, v.real, v.d_loss, v.d_loss_real,
                  v.d_loss_gen,
-                 v.g_loss],
+                 v.g_loss] + v.conditionals,
                 allow_input_downcast=True, mode=mode, givens=v.replace_z)
 
     def compile(self, optimizer_g, optimizer_d, gan_regulizer=None, mode=None):
@@ -411,11 +411,11 @@ class GAN(AbstractModel):
         ins = [z] + self._conditionals_to_list(conditionals)
         return self._generate(*ins)[0]
 
-    def debug(self, X, z=None, conditionals=None):
+    def debug(self, X, z=None, conditionals={}):
         if z is None:
             z = self._uniform_z()
         labels = ['g_out', 'fake', 'real', 'd_loss', 'd_real',
-                  'd_gen', 'g_loss']
+                  'd_gen', 'g_loss'] + list(conditionals.keys())
         ins = [X, z] + self._conditionals_to_list(conditionals)
         outs = self._debug(*ins)
         return DotMap(dict(zip(labels, outs)))
