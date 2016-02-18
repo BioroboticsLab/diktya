@@ -24,16 +24,18 @@ import skimage
 import skimage.transform
 import theano
 import numpy as np
-from beras.util import _add_virtual_border, downsample, upsample, tile, blur, \
-    sobel
+from beras.util import _add_virtual_border, downsample, upsample, tile, \
+    smooth, sobel
 import matplotlib.pyplot as plt
 import theano.tensor as T
-
+import skimage.data
+import skimage.color
 
 @pytest.fixture
-def lena():
-    lena = scipy.misc.lena() / 255.
-    return cast_to_floatx(lena[::4, ::4])
+def astronaut():
+    astronaut = skimage.data.astronaut() / 255.
+    astronaut = skimage.color.rgb2gray(astronaut)
+    return cast_to_floatx(astronaut[::4, ::4])
 
 
 def plt_save_and_maybe_show(fname):
@@ -72,8 +74,8 @@ def test_benchmark_add_border():
     print("add_border took: {:.4f}ms".format(1000 * t.timeit(number=n) / n))
 
 
-def test_sobel(lena):
-    x = theano.shared(lena[np.newaxis, np.newaxis])
+def test_sobel(astronaut):
+    x = theano.shared(astronaut[np.newaxis, np.newaxis])
     sobel_x, sobel_y = [s.eval() for s in sobel(x)]
     plt.subplot(131)
     plt.imshow(x.get_value()[0, 0, :])
@@ -85,21 +87,21 @@ def test_sobel(lena):
     plt.show()
 
 
-def test_blur(lena):
-    x = theano.shared(lena[np.newaxis, np.newaxis, :64, :64])
-    lena_blur = blur(x, sigma=3).eval()
-    assert lena_blur.shape == x.get_value().shape
+def test_smooth(astronaut):
+    x = theano.shared(astronaut[np.newaxis, np.newaxis, :64, :64])
+    smoothed = smooth(x, sigma=3).eval()
+    assert smoothed.shape == x.get_value().shape
     plt.subplot(121)
     plt.imshow(x.get_value()[0, 0, :])
     plt.subplot(122)
-    plt.imshow(lena_blur[0, 0, :])
-    plt_save_and_maybe_show("test_blur.png")
+    plt.imshow(smoothed[0, 0, :])
+    plt_save_and_maybe_show("test_smooth.png")
     plt.show()
 
 
-def test_downsample(lena):
-    lena = skimage.transform.resize(lena, (64, 64))
-    x = theano.shared(lena.reshape(1, 1, 64, 64))
+def test_downsample(astronaut):
+    astronaut = skimage.transform.resize(astronaut, (64, 64))
+    x = theano.shared(astronaut.reshape(1, 1, 64, 64))
     x_small = downsample(x).eval()
     plt.subplot(121)
     plt.imshow(x.get_value()[0, 0, :])
@@ -108,8 +110,8 @@ def test_downsample(lena):
     plt_save_and_maybe_show("test_downsample.png")
 
 
-def test_upsample(lena):
-    x = theano.shared(lena[np.newaxis, np.newaxis])
+def test_upsample(astronaut):
+    x = theano.shared(astronaut[np.newaxis, np.newaxis])
     x_up = upsample(downsample(x)).eval()
     plt.subplot(121)
     plt.imshow(x.get_value()[0, 0, :])
