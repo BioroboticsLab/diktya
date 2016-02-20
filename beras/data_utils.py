@@ -59,3 +59,10 @@ class HDF5Tensor:
     @property
     def shape(self):
         return tuple((self.end - self.start, ) + self.data.shape[2:])
+
+
+def probabilistic_mean(tensor, nb_samples=10000, axis=0):
+    nb_samples = min(nb_samples, len(tensor))
+    idx = np.sort(np.random.choice(len(tensor), nb_samples, replace=False))
+    samples = tensor[idx]
+    return np.mean(samples, axis=axis, dtype=np.float64)
