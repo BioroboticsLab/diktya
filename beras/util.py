@@ -118,8 +118,8 @@ def resize_interpolate(input, scale):
 
     x_s = grid[0]
     y_s = grid[1]
-    x_s_flat = x_s.flatten()
-    y_s_flat = y_s.flatten()
+    x_s_flat = T.repeat(x_s.flatten(), num_batch)
+    y_s_flat = T.repeat(y_s.flatten(), num_batch)
 
     # dimshuffle input to  (bs, height, width, channels)
     input_dim = input.dimshuffle(0, 2, 3, 1)
