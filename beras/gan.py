@@ -41,7 +41,8 @@ class GAN(AbstractModel):
     class Regularizer(object):
         def get_losses(self, gan, g_loss, d_loss):
             updates = []
-            return g_loss, d_loss, updates
+            metrics = {}
+            return g_loss, d_loss, updates, metrics
 
     class L2Regularizer(Regularizer):
         def __init__(self, low=0.9, high=1.3):
@@ -67,7 +68,7 @@ class GAN(AbstractModel):
             new_l2 = T.maximum(self.l2_coef + delta_l2, 0.)
             updates = [(self.l2_coef, new_l2)]
             d_loss = self._apply_l2_regulizer(gan.D.params, d_loss)
-            return g_loss, d_loss, updates
+            return g_loss, d_loss, updates, {'l2_reg': self.l2_coef.mean()}
 
     def __init__(self, generator: Graph, discremenator: Graph, z_shape,
                  reconstruct_fn=None):
@@ -226,8 +227,10 @@ class GAN(AbstractModel):
     def build_regulizer(self, v_loss_map, gan_regulizer=None):
         v = v_loss_map
         gan_regulizer = self.get_regulizer(gan_regulizer)
-        v.g_loss, v.d_loss, v.reg_updates = gan_regulizer.get_losses(
+        v.g_loss, v.d_loss, v.reg_updates, metrics = gan_regulizer.get_losses(
                 self, v.g_loss, v.d_loss)
+        v.metrics.d_loss = v.d_loss
+        v.metrics.update(metrics)
 
     def build_opt_g(self, optimizer, v_loss_map):
         v = v_loss_map
@@ -267,10 +270,10 @@ class GAN(AbstractModel):
     def compile(self, optimizer_g, optimizer_d, gan_regulizer=None, mode=None):
         import pytest
         v = self.build_opt(optimizer_g, optimizer_d, gan_regulizer)
-        # pytest.set_trace()
+        self.train_labels = list(sorted(v.metrics.keys()))
         self._train = theano.function(
                 [v.real] + v.conditionals,
-                [v.d_loss, v.d_loss_real, v.d_loss_gen, v.g_loss],
+                [m for _, m in sorted(v.metrics.items())],
                 updates=v.d_updates + v.g_updates + v.reg_updates,
                 allow_input_downcast=True, mode=mode)
 
@@ -342,8 +345,6 @@ class GAN(AbstractModel):
             callbacks = []
         conditionals = self._conditionals_to_list(conditional_inputs)
 
-        labels = ['d_loss', 'd_real', 'd_gen', 'g_loss']
-
         def train(model, batch_ids, batch_index, batch_logs=None):
             if batch_logs is None:
                 batch_logs = {}
@@ -351,13 +352,13 @@ class GAN(AbstractModel):
             for c in conditionals:
                 ins.append(c[batch_ids])
             outs = self._train(*ins)
-            for key, value in zip(labels, outs):
+            for key, value in zip(self.train_labels, outs):
                 batch_logs[key] = value
 
         assert self.batch_size % 2 == 0, "batch_size must be multiple of two."
         self._fit(train, len(X), batch_size=self.batch_size, nb_epoch=nb_epoch,
                   verbose=verbose, callbacks=callbacks, shuffle=shuffle,
-                  metrics=labels)
+                  metrics=self.train_labels)
 
     def print_svg(self):
         theano.printing.pydotprint(self._g_train, outfile="train_g.png")
