@@ -110,16 +110,21 @@ def resize_nearest_neighbour(images, scale):
 
 
 def resize_interpolate(input, scale):
+    # from here https://github.com/Lasagne/Lasagne/blob/master/lasagne/layers/special.py
     num_batch, num_channels, height, width = input.shape
 
     out_height = T.cast(height / scale, 'int64')
     out_width = T.cast(width / scale, 'int64')
+    theta = theano.shared(np.array([[[1, 0, 0],
+                                     [0, 1, 0]]]))
+    theta = theta.repeat(num_batch, axis=0)
     grid = _meshgrid(out_height, out_width)
-
-    x_s = grid[0]
-    y_s = grid[1]
-    x_s_flat = T.repeat(x_s.flatten(), num_batch)
-    y_s_flat = T.repeat(y_s.flatten(), num_batch)
+    # this could be removed
+    grid_t = T.dot(theta, grid)
+    x_s = grid_t[:, 0]
+    y_s = grid_t[:, 1]
+    x_s_flat = x_s.flatten()
+    y_s_flat = y_s.flatten()
 
     # dimshuffle input to  (bs, height, width, channels)
     input_dim = input.dimshuffle(0, 2, 3, 1)
