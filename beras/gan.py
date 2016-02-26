@@ -26,11 +26,10 @@ from theano.tensor import TensorType
 import theano.tensor as T
 import numpy as np
 from theano.ifelse import ifelse
-from keras.models import Sequential, standardize_X, Graph, model_from_json, \
-    model_from_config
+from keras.models import Graph, model_from_config
 from keras import optimizers
-
-from beras.models import AbstractModel, asgraph
+from keras.callbacks import Callback
+from beras.models import AbstractModel
 
 
 class GAN(AbstractModel):
@@ -38,17 +37,20 @@ class GAN(AbstractModel):
     g_out_name = "g_out"
     d_input = 'd_input'
 
-    class Regularizer(object):
+    class Regularizer(Callback):
         def get_losses(self, gan, g_loss, d_loss):
             updates = []
             metrics = {}
             return g_loss, d_loss, updates, metrics
 
     class L2Regularizer(Regularizer):
-        def __init__(self, low=0.9, high=1.3):
-            self.l2_coef = theano.shared(np.cast['float32'](0.), name="l2_rate")
+        def __init__(self, low=0.9, high=1.2, delta_value=5e-5, l2_init=0):
+            self.l2_coef = theano.shared(
+                np.cast['float32'](l2_init), name="l2_rate")
             self.low = low
             self.high = high
+            self.delta = theano.shared(np.cast['float32'](delta_value),
+                                       name="l2_rate")
 
         def _apply_l2_regulizer(self, params, loss):
             l2_loss = T.zeros_like(loss)
@@ -57,12 +59,11 @@ class GAN(AbstractModel):
             return loss + l2_loss
 
         def get_losses(self, gan, g_loss, d_loss):
-            delta = np.cast['float32'](1e-5)
             small_delta = np.cast['float32'](1e-7)
             delta_l2 = ifelse(g_loss > self.high,
-                              delta,
+                              self.delta,
                               ifelse(g_loss < self.low,
-                                     -delta,
+                                     -self.delta,
                                      -small_delta))
 
             new_l2 = T.maximum(self.l2_coef + delta_l2, 0.)
@@ -70,18 +71,19 @@ class GAN(AbstractModel):
             d_loss = self._apply_l2_regulizer(gan.D.params, d_loss)
             return g_loss, d_loss, updates, {'l2_reg': self.l2_coef.mean()}
 
-    def __init__(self, generator: Graph, discremenator: Graph, z_shape,
-                 reconstruct_fn=None):
+    def __init__(self, generator: Graph, discriminator: Graph, z_shape,
+                 batch_size=128, reconstruct_fn=None):
         """
         :param generator: Generator network. A keras Graph  model
-        :param discremenator: Discriminator network. A keras Graph model
+        :param discriminator: Discriminator network. A keras Graph model
         :param z_shape: Shape of the random z vector.
         :return:
         """
         assert type(generator) == Graph, "generator must be of type Graph"
-        assert type(discremenator) == Graph, \
-            "discremenator must be of type Graph"
+        assert type(discriminator) == Graph, \
+            "discriminator must be of type Graph"
         self.z_shape = z_shape
+        self.batch_size = batch_size
         self.G = generator
 
         def filter_conds(name, inputs):
@@ -89,7 +91,7 @@ class GAN(AbstractModel):
 
         self.generator_conds = filter_conds(self.z_name, self.G.inputs)
 
-        self.D = discremenator
+        self.D = discriminator
         self.discriminator_conds = filter_conds(self.d_input, self.D.inputs)
         conditional_joined = set(self.discriminator_conds).union(
             set(self.generator_conds))
@@ -98,10 +100,6 @@ class GAN(AbstractModel):
             self.reconstruct_fn = lambda g_outmap: g_outmap["output"]
         else:
             self.reconstruct_fn = reconstruct_fn
-
-    @property
-    def batch_size(self):
-        return self.z_shape[0]
 
     @staticmethod
     def _set_input(model, inputs, labels):
@@ -141,8 +139,12 @@ class GAN(AbstractModel):
         return out
 
     def _get_dis_output(self, fake, real,
-                        conditionals, labels, train=True):
+                        conditionals, labels, d_image_views=1, train=True):
+        fake_shape = fake.shape
+
         d_in = T.concatenate([fake, real], axis=0)
+        d_in = d_in.reshape((-1, fake_shape[1], fake_shape[2],
+                             fake_shape[3] * d_image_views))
         self._set_input(self.D, [d_in] + conditionals,
                         [GAN.d_input] + labels)
         out = self.D.get_output(train)
@@ -150,16 +152,41 @@ class GAN(AbstractModel):
             out = {"output": out}
         return out
 
-    def losses(self, d_out, objective=binary_crossentropy):
-        d_out_given_fake = d_out[:self.batch_size // 2]
-        d_out_given_real = d_out[self.batch_size // 2:]
-        d_loss_fake = objective(T.zeros_like(d_out_given_fake),
-                                d_out_given_fake).mean()
+    def d_out_given_fake_for_gen(self, d_out, d_image_views=1):
+        return d_out[:self.batch_size // (d_image_views)]
+
+    def d_out_given_fake_for_dis(self, d_out, d_image_views=1):
+        bs = self.batch_size // d_image_views
+        return d_out[bs:bs+bs//2]
+
+    def d_out_given_real(self, d_out, d_image_views=1):
+        bs = self.batch_size // d_image_views
+        return d_out[bs + bs//2:]
+
+    def linear_losses(self, d_out, objective=None, d_image_views=1):
+        g_loss = -self.d_out_given_fake_for_gen(d_out, d_image_views).mean()
+        d_out_given_fake = self.d_out_given_fake_for_dis(d_out, d_image_views)
+        d_out_given_real = self.d_out_given_real(d_out, d_image_views)
+        d_loss_fake = d_out_given_fake.mean()
+        d_loss_fake = d_loss_fake + d_loss_fake**2
+        d_loss_real = -d_out_given_real.mean()
+        d_loss_real = d_loss_real + d_loss_real**2
+        d_loss = d_loss_real + d_loss_fake
+        return g_loss, d_loss, d_loss_real, d_loss_fake
+
+    def losses(self, d_out, objective=binary_crossentropy, d_image_views=1):
+        d_out_given_fake_gan = self.d_out_given_fake_for_gen(
+            d_out, d_image_views)
+        d_out_given_fake_dis = self.d_out_given_fake_for_dis(
+            d_out, d_image_views)
+        d_out_given_real = self.d_out_given_real(d_out, d_image_views)
+        d_loss_fake = objective(T.zeros_like(d_out_given_fake_dis),
+                                d_out_given_fake_dis).mean()
         d_loss_real = objective(T.ones_like(d_out_given_real),
                                 d_out_given_real).mean()
         d_loss = d_loss_real + d_loss_fake
-        g_loss = objective(T.ones_like(d_out_given_fake),
-                           d_out_given_fake).mean()
+        g_loss = objective(T.ones_like(d_out_given_fake_gan),
+                           d_out_given_fake_gan).mean()
         return g_loss, d_loss, d_loss_real, d_loss_fake
 
     @staticmethod
@@ -170,8 +197,7 @@ class GAN(AbstractModel):
         else:
             return TensorType(x.dtype, x.broadcastable)()
 
-    def build_loss(self, z='random', objective=binary_crossentropy):
-        objective = keras.objectives.get(objective)
+    def conditionals_dict(self):
         conditional_dict = OrderedDict()
         for c in self.conditionals:
             if c in self.G.inputs and c in self.D.inputs:
@@ -189,10 +215,16 @@ class GAN(AbstractModel):
                 assert c in self.D.inputs
                 shape = self.D.inputs[c].input_shape
             conditional_dict[c] = K.placeholder(shape=shape, name=c)
+        return conditional_dict
 
-        conditionals = list(conditional_dict.values())
-        gen_conditionals = [conditional_dict[n] for n in self.generator_conds]
-        dis_conditionals = [conditional_dict[n]
+    def build_loss(self, z='random', objective=binary_crossentropy,
+                   d_loss_grad_weight=0, d_image_views=1,
+                   use_linear_losses=False):
+        objective = keras.objectives.get(objective)
+        conditionals_dict = self.conditionals_dict()
+        conditionals = list(conditionals_dict.values())
+        gen_conditionals = [conditionals_dict[n] for n in self.generator_conds]
+        dis_conditionals = [conditionals_dict[n]
                             for n in self.discriminator_conds]
 
         z = self._get_z(z)
@@ -201,17 +233,31 @@ class GAN(AbstractModel):
         g_out = g_outmap["output"]
         fake = self.reconstruct_fn(g_outmap)
         real = K.placeholder(ndim=fake.ndim, name="real")
-        d_outmap = self._get_dis_output(fake, real, dis_conditionals,
-                                        self.discriminator_conds)
+        d_outmap = self._get_dis_output(
+            fake, real, dis_conditionals,
+            self.discriminator_conds, d_image_views)
         d_out = d_outmap["output"]
-        g_loss, d_loss, d_loss_real, d_loss_gen = self.losses(d_out, objective)
 
+        loss_fn = self.losses
+        if use_linear_losses:
+            loss_fn = self.linear_losses
+        g_loss, d_loss, d_loss_real, d_loss_gen = loss_fn(
+            d_out, objective, d_image_views)
+
+        if d_loss_grad_weight != 0:
+            fake_grad = T.grad(g_loss, fake)
+            d_loss_grad = fake_grad.norm(2)
+            d_loss_grad *= d_loss_grad_weight
+            d_loss += d_loss_grad
+
+        metrics = {'d_loss': d_loss, 'd_real': d_loss_real,
+                   'd_gen': d_loss_gen, 'g_loss': g_loss}
         placeholder_z = self._placeholder(z, name="z_placeholder")
         replace_z = [(z, placeholder_z)]
         return DotMap(locals())
 
     @staticmethod
-    def get_regulizer(self, regulizer=None) -> Regularizer:
+    def get_regulizer(regulizer=None):
         if regulizer is None:
             return GAN.Regularizer()
         elif regulizer == 'l2':
@@ -245,8 +291,10 @@ class GAN(AbstractModel):
                 self.D.params, self.D.constraints, v.d_loss)
 
     def build_opt(self, optimizer_g, optimizer_d, gan_regulizer=None,
-                  z_type='random'):
-        v = self.build_loss(z_type)
+                  z_type='random', d_image_views=1, use_linear_losses=False):
+        v = self.build_loss(z_type, d_image_views=d_image_views,
+                            use_linear_losses=use_linear_losses)
+        print(gan_regulizer)
         self.build_regulizer(v, gan_regulizer)
         self.build_opt_d(optimizer_d, v)
         self.build_opt_g(optimizer_g, v)
@@ -259,17 +307,30 @@ class GAN(AbstractModel):
                 allow_input_downcast=True,
                 mode=mode, givens=v.replace_z)
 
-    def _compile_debug(self, v, mode=None):
-        self._debug = theano.function(
-                [v.real, v.placeholder_z] + v.conditionals,
-                [v.g_out, v.fake, v.real, v.d_loss, v.d_loss_real,
-                 v.d_loss_gen,
-                 v.g_loss] + v.conditionals,
-                allow_input_downcast=True, mode=mode, givens=v.replace_z)
+    def debug_output(self, v):
+        v_labels = ['g_out', 'fake', 'real', 'd_loss', 'd_loss_real',
+                    'd_loss_gen', 'g_loss']
+        if 'd_loss_grad' in v:
+            v_labels.extend(['d_loss_grad', 'fake_grad'])
 
-    def compile(self, optimizer_g, optimizer_d, gan_regulizer=None, mode=None):
-        import pytest
-        v = self.build_opt(optimizer_g, optimizer_d, gan_regulizer)
+        d = [(label, v[label]) for label in v_labels]
+        d.extend(list(v.conditionals_dict.items()))
+        return OrderedDict(d)
+
+    def _compile_debug(self, v, mode=None):
+        debug_dict = self.debug_output(v)
+        self._debug_labels = list(debug_dict.keys())
+        print(list(debug_dict.items()))
+        self._debug = theano.function(
+            [v.real, v.placeholder_z] + v.conditionals,
+            list(debug_dict.values()),
+            allow_input_downcast=True, mode=mode, givens=v.replace_z)
+
+    def compile(self, optimizer_g, optimizer_d, gan_regulizer=None,
+                d_image_views=1, use_linear_losses=False, mode=None):
+        v = self.build_opt(optimizer_g, optimizer_d, gan_regulizer,
+                           d_image_views=d_image_views,
+                           use_linear_losses=use_linear_losses)
         self.train_labels = list(sorted(v.metrics.keys()))
         self._train = theano.function(
                 [v.real] + v.conditionals,
@@ -360,6 +421,26 @@ class GAN(AbstractModel):
                   verbose=verbose, callbacks=callbacks, shuffle=shuffle,
                   metrics=self.train_labels)
 
+    def fit_generator(self, generator, samples_per_epoch,
+                      nb_epoch, verbose=1, callbacks=[]):
+        if callbacks is None:
+            callbacks = []
+
+        def train(model, batch_ids, batch_index, batch_logs=None):
+            ins = next(generator)
+            X = ins['real']
+            del ins['real']
+            conditionals = self._conditionals_to_list(ins)
+            inputs = [X] + conditionals
+            outs = self._train(*inputs)
+            for key, value in zip(self.train_labels, outs):
+                batch_logs[key] = value
+
+        assert self.batch_size % 2 == 0, "batch_size must be multiple of two."
+        self._fit(train, samples_per_epoch, batch_size=self.batch_size,
+                  nb_epoch=nb_epoch, verbose=verbose, callbacks=callbacks,
+                  shuffle=False, metrics=self.train_labels)
+
     def print_svg(self):
         theano.printing.pydotprint(self._g_train, outfile="train_g.png")
         theano.printing.pydotprint(self._d_train, outfile="train_d.png")
@@ -415,11 +496,9 @@ class GAN(AbstractModel):
     def debug(self, X, z=None, conditionals={}):
         if z is None:
             z = self._uniform_z()
-        labels = ['g_out', 'fake', 'real', 'd_loss', 'd_real',
-                  'd_gen', 'g_loss'] + list(conditionals.keys())
         ins = [X, z] + self._conditionals_to_list(conditionals)
         outs = self._debug(*ins)
-        return DotMap(dict(zip(labels, outs)))
+        return DotMap(dict(zip(self._debug_labels, outs)))
 
     def interpolate(self, x, y):
         z = np.zeros(self.z_shape)
@@ -455,10 +534,6 @@ class GAN(AbstractModel):
         for i in range(k):
             self._d_train([X, ZD])
         self._d_train([ZG])
-
-    @property
-    def batch_size(self):
-        return self.z_shape[0]
 
     def g_output_shape(self):
         return (self.batch_size,) + self.G.output_shape[1:]
