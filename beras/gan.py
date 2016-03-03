@@ -26,7 +26,10 @@ import keras.optimizers
 from keras.optimizers import Optimizer
 from keras.callbacks import Callback
 from beras.models import AbstractModel
-from more_itertools import flatten
+
+
+def flatten(listOfLists):
+    return [el for list in listOfLists for el in list]
 
 
 def gan_binary_crossentropy(d_out_given_fake_for_gen,
@@ -139,9 +142,9 @@ class GAN(AbstractModel):
             new_l2 = T.maximum(self.l2_coef + delta_l2, 0.)
             updates = [(self.l2_coef, new_l2)]
             self.gan.updates += updates
-            params = list(flatten(
+            params = flatten(
                 [n.trainable_weights
-                 for n in self.gan.get_discriminator_nodes().values()]))
+                 for n in self.gan.get_discriminator_nodes().values()])
             d_loss = self._apply_l2_regulizer(params, d_loss)
             return g_loss, d_loss
 
@@ -221,9 +224,9 @@ class GAN(AbstractModel):
                 *[n.get_params() for n in nodes])
 
             updates = optimizer.get_updates(
-                list(flatten(weights)),
-                list(flatten(constraints)), loss)
-            return updates + list(flatten(layer_updates))
+                flatten(weights),
+                flatten(constraints), loss)
+            return updates + flatten(layer_updates)
 
         d_out_given_fake_gen = \
             self.graph.outputs[self.dis_out_given_fake_for_gen] \
