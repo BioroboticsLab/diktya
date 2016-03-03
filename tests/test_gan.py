@@ -11,31 +11,25 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import shutil
-import tempfile
 
-from keras.backend.common import cast_to_floatx
 
-from beras.models import asgraph
 from tests import visual_debug, TEST_OUTPUT_DIR
 import os
 import keras
 import theano
 from dotmap import DotMap
-from keras.callbacks import ModelCheckpoint
 import keras.initializations
-from keras.layers.convolutional import Convolution2D, MaxPooling2D, UpSampling2D
-from keras.layers.core import Dense, Dropout, Flatten
+from keras.layers.convolutional import Convolution2D
+from keras.layers.core import Dense, Flatten
 
 from keras.models import Sequential, Graph
 import math
 import pytest
 
-
-from beras.gan import GAN
+from beras.gan import GAN, sequential_to_gan, gan_binary_crossentropy, \
+    add_gan_outputs
 import numpy as np
 from beras.util import LossPrinter
-from keras.objectives import mean_squared_error
 
 
 def sample_circle(nb_samples):
@@ -90,12 +84,10 @@ def simple_gan():
                         input_dim=simple_gan_nb_z))
     generator.add(Dense(simple_gan_nb_z, activation='relu'))
     generator.add(Dense(simple_gan_nb_out, activation='sigmoid'))
-    generator = asgraph(generator, input_name=GAN.z_name)
     discriminator = Sequential()
     discriminator.add(Dense(20, activation='relu', input_dim=2))
     discriminator.add(Dense(1, activation='sigmoid'))
-    discriminator = asgraph(discriminator, input_name=GAN.d_input)
-    return GAN(generator, discriminator, simple_gan_z_shape)
+    return sequential_to_gan(generator, discriminator)
 
 
 def test_gan_learn_simple_distribution():
@@ -111,11 +103,14 @@ def test_gan_learn_simple_distribution():
 
     for r in (GAN.Regularizer(), GAN.Regularizer()):
         gan = simple_gan()
-        gan.compile('adam', 'adam', gan_regulizer=r)
+        gan.add_gan_regularizer(r)
+        gan.compile('adam', 'adam', gan_binary_crossentropy)
         callbacks = [LossPrinter()]
         if visual_debug:
             callbacks.append(Plotter(X, TEST_OUTPUT_DIR + "/epoches_plot"))
-        gan.fit(X, nb_epoch=1, verbose=0, callbacks=callbacks)
+        z = np.random.uniform(-1, 1, (len(X), simple_gan_nb_z))
+        gan.fit({'real': X, 'z': z}, nb_epoch=1, verbose=0,
+                callbacks=callbacks, batch_size={'real': 32, 'z': 96})
 
 
 @pytest.mark.skipif(reason="No multiple comiples #1")
@@ -124,66 +119,38 @@ def test_gan_multiple_compiles(simple_gan):
     simple_gan.compile('adam', 'adam')
 
 
-def test_gan_save_load(simple_gan):
-    directory = tempfile.mkdtemp()
-    simple_gan.save(directory)
-    loaded_gan = GAN.load(directory)
-    assert tuple(simple_gan.z_shape) == tuple(loaded_gan.z_shape)
-
-    for ps, pl in zip(simple_gan.G.params + simple_gan.D.params,
-                      loaded_gan.G.params + loaded_gan.D.params):
-        np.testing.assert_allclose(pl.get_value(), ps.get_value())
-    shutil.rmtree(directory)
-
-
-def test_gan_optimize_image(simple_gan):
-    loss_fn = lambda t, p: mean_squared_error(t, p).mean()
-    simple_gan.compile_optimize_image('adam', loss_fn, ndim_expected=2)
-    z = cast_to_floatx(np.random.uniform(-1, 1, simple_gan.z_shape))
-    goal = simple_gan.generate()
-    nb_iteration = 1000
-    optimized_image, optimized_z = simple_gan.optimize_image(
-        goal, nb_iteration, z_start=z, verbose=1)
-    np.testing.assert_allclose(optimized_image, goal, atol=0.1, rtol=0.1)
-
-
 def test_gan_utility_funcs(simple_gan: GAN):
-    simple_gan.compile('adam', 'adam')
-    xy_shp = simple_gan.z_shape[1:]
+    simple_gan.compile('adam', 'adam', gan_binary_crossentropy)
+    xy_shp = simple_gan_z_shape[1:]
     x = np.zeros(xy_shp, dtype=np.float32)
     y = np.zeros(xy_shp, dtype=np.float32)
     simple_gan.interpolate(x, y)
 
-    z = np.ones(simple_gan.z_shape, dtype=np.float32)
-    real = np.zeros(simple_gan.g_output_shape())
-    debug_out = simple_gan.debug(real, z)
-    for debug_label in ['fake', 'real', 'd_loss', 'd_real', 'd_gen', 'g_loss']:
-        assert debug_label in debug_out
-
     z_point = simple_gan.random_z_point()
     neighbors = simple_gan.neighborhood(z_point, std=0.05)
 
-    diff = np.stack([neighbors[0]]*simple_gan.batch_size) - neighbors
+    diff = np.stack([neighbors[0]]*len(neighbors)) - neighbors
     assert np.abs(diff).mean() < 0.1
 
 
 def test_gan_graph():
-    g1 = Graph()
-    g1.add_input("z", (1, 8, 8))
-    g1.add_input("cond", (1, 8, 8))
-    g1.add_node(Convolution2D(10, 2, 2, activation='relu', border_mode='same'),
-                name="conv", inputs=['z', 'cond'], concat_axis=1)
-    g1.add_output("output", input='conv')
-
-    d1 = Sequential()
-    d1.add(Convolution2D(5, 2, 2, activation='relu', input_shape=(1, 8, 8)))
-    d1.add(Flatten())
-    d1.add(Dense(1, input_dim=20, activation='sigmoid'))
-    d1 = asgraph(d1, input_name=GAN.d_input)
-    z_shape = (1, 1, 8, 8)
-    gan = GAN(g1, d1, z_shape)
-    gan.compile('adam', 'adam')
-    gan.generate(conditionals={'cond': np.zeros(z_shape)})
+    g = Graph()
+    g.add_input(GAN.z_name, (1, 8, 8))
+    g.add_input(GAN.real_name, (1, 8, 8))
+    g.add_input("gen_cond", (1, 8, 8))
+    g.add_node(Convolution2D(10, 2, 2, activation='relu', border_mode='same'),
+               name=GAN.generator_name, inputs=['z', 'gen_cond'], concat_axis=1)
+    g.add_node(Convolution2D(5, 2, 2, activation='relu'),
+               "dis_conv", inputs=[GAN.generator_name, GAN.real_name],
+               concat_axis=1)
+    g.add_node(Flatten(), "dis_flatten", input="dis_conv")
+    g.add_node(Dense(1, input_dim=20, activation='sigmoid'),
+               "dis", input="dis_flatten")
+    add_gan_outputs(g, input='dis')
+    gan = GAN(g)
+    gan.compile('adam', 'adam', gan_binary_crossentropy)
+    z_shape = (64, 1, 8, 8)
+    gan.generate({'gen_cond': np.zeros(z_shape)}, z_shape)
 
 
 def test_gan_l2_regularizer():
@@ -192,36 +159,16 @@ def test_gan_l2_regularizer():
     g_loss = theano.shared(np.cast['float32'](reg.high + 2))
     d_loss = theano.shared(np.cast['float32'](0.))
     gan = DotMap()
-    gan.D.params = [theano.shared(np.cast['float32'](1.))]
-    reg_g_loss, reg_d_loss, updates = reg.get_losses(gan, g_loss, d_loss)
-    fn = theano.function([], [reg_g_loss, reg_d_loss], updates=updates)
+    nodes = DotMap()
+    nodes.layer.trainable_weights = [theano.shared(np.cast['float32'](1.))]
+    gan.get_discriminator_nodes = lambda: nodes
+    gan.updates = []
+    reg.set_gan(gan)
+    reg_g_loss, reg_d_loss = reg(g_loss, d_loss)
+    fn = theano.function([], [reg_g_loss, reg_d_loss], updates=gan.updates)
     fn()
     assert reg.l2_coef.get_value() > 0.
     g_loss.set_value(np.cast['float32'](reg.low - 0.1))
     fn()
     fn()
     assert reg.l2_coef.get_value() == 0.
-
-
-def test_conditional_conv_gan():
-    z_shape = (1, 1, 8, 8)
-    g1 = Sequential()
-    g1.add(Convolution2D(10, 2, 2, activation='relu', border_mode='same',
-                         input_shape=(2, 8, 8)))
-    g1.add(UpSampling2D((2, 2)))
-    g1.add(Convolution2D(1, 2, 2, activation='sigmoid', border_mode='same'))
-    g1 = asgraph(g1, inputs={"z": z_shape[1:], "cond": z_shape[1:]},
-                 concat_axis=1)
-
-    d1 = Sequential()
-    d1.add(Convolution2D(5, 2, 2, activation='relu', input_shape=z_shape[1:]))
-    d1.add(MaxPooling2D())
-    d1.add(Dropout(0.5))
-    d1.add(Flatten())
-    d1.add(Dense(10, activation='relu'))
-    d1.add(Dropout(0.5))
-    d1.add(Dense(1, activation='sigmoid'))
-    d1 = asgraph(d1, input_name=GAN.d_input)
-    gan = GAN(g1, d1, z_shape)
-    gan.compile('adam', 'adam')
-    gan.generate(conditionals={'cond': np.zeros(z_shape)})

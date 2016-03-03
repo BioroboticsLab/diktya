@@ -68,18 +68,11 @@ class AbstractModel(object):
             val_outs = [val_outs]
         return val_outs
 
-    def _fit(self, f, nb_train_sample, batch_size=128, nb_epoch=100, verbose=1, callbacks=[],
-             val_ins=None, shuffle=True, metrics=[], val_fn=None):
-        '''
-            Abstract fit function for f(*ins). Assume that f returns a list, labelled by out_labels.
-        '''
-        do_validation = False
-        if val_fn and val_ins:
-            do_validation = True
-            if verbose:
-                print("Train on %d samples, validate on %d samples" % (nb_train_sample, len(val_ins[0])))
-
-        index_array = np.arange(nb_train_sample)
+    def _fit(self, f, nb_train_sample, nb_batches, batch_size=128, nb_epoch=100,
+             verbose=1, callbacks=[], shuffle=True, metrics=[]):
+        """
+            Abstract fit function for f(*ins). Assume that f returns a list,
+            labelled by out_labels.  """
 
         history = cbks.History()
         if verbose:
@@ -90,11 +83,11 @@ class AbstractModel(object):
 
         callbacks._set_model(self)
         callbacks._set_params({
-            'batch_size': batch_size,
+            'batch_size': nb_train_sample // nb_batches,
             'nb_epoch': nb_epoch,
             'nb_sample': nb_train_sample,
             'verbose': verbose,
-            'do_validation': do_validation,
+            'do_validation': False,
             'metrics': metrics,
         })
         callbacks.on_train_begin()
@@ -102,29 +95,15 @@ class AbstractModel(object):
         self.stop_training = False
         for epoch in range(nb_epoch):
             callbacks.on_epoch_begin(epoch)
-            if shuffle == 'batch':
-                index_array = batch_shuffle(index_array, batch_size)
-            elif shuffle:
-                np.random.shuffle(index_array)
-
-            batches = make_batches(nb_train_sample, batch_size)
-            for batch_index, (batch_start, batch_end) in enumerate(batches):
-                batch_ids = index_array[batch_start:batch_end]
+            for batch_index in range(nb_batches):
                 batch_logs = {}
                 batch_logs['batch'] = batch_index
-                batch_logs['size'] = len(batch_ids)
+                batch_logs['size'] = batch_size
                 callbacks.on_batch_begin(batch_index, batch_logs)
 
-                f(self, batch_ids, batch_index, batch_logs)
+                f(self, batch_index, batch_logs)
                 callbacks.on_batch_end(batch_index, batch_logs)
-
                 epoch_logs = {}
-                if batch_index == len(batches) - 1:  # last batch
-                    # validation
-                    if do_validation:
-                        val_outs = val_fn(val_ins)
-                        for l, o in zip(out_labels, val_outs):
-                            epoch_logs['val_' + l] = o
 
             callbacks.on_epoch_end(epoch, epoch_logs)
             if self.stop_training:
