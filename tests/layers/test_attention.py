@@ -14,7 +14,7 @@
 import os
 import shutil
 import tempfile
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 import math
 from keras.layers.convolutional import Convolution2D
 from keras.layers.core import Dense, Flatten, Dropout
@@ -88,9 +88,11 @@ def test_save_and_loads_weights():
         net_load, rotnet_load = get_net()
         net_save.save_weights(save_path)
         net_load.load_weights(save_path)
-        for s, l in zip(net_save.params, net_load.params):
+        for s, l in zip(net_save.trainable_weights,
+                        net_load.trainable_weights):
             assert (s.get_value() == l.get_value()).all()
-        for s, l in zip(rotnet_save.params, rotnet_load.params):
+        for s, l in zip(rotnet_save.trainable_weights,
+                        rotnet_load.trainable_weights):
             assert (s.get_value() == l.get_value()).all()
     finally:
         shutil.rmtree(dirname)
