@@ -110,11 +110,17 @@ class GAN(AbstractModel):
             self.gan = gan
 
     class StopRegularizer(Callback):
-        def __call__(self, g_loss, d_loss):
-            return g_loss, d_loss
+        def __init__(self, high=1.3):
+            self.high = high
 
         def set_gan(self, gan):
             self.gan = gan
+
+        def __call__(self, g_loss, d_loss):
+            d_loss = ifelse(g_loss > self.high,
+                            0.*d_loss,
+                            d_loss)
+            return g_loss, d_loss
 
     class L2Regularizer(Regularizer):
         def __init__(self, low=0.9, high=1.2, delta_value=5e-5, l2_init=0):
@@ -242,7 +248,7 @@ class GAN(AbstractModel):
         self._set_loss_metrics(*losses)
         g_loss, d_loss = losses[:2]
         for r in self._gan_regularizers:
-            w_loss, d_loss = r(g_loss, d_loss)
+            g_loss, d_loss = r(g_loss, d_loss)
 
         g_updates = get_updates(
             g_optimizer, self.get_generator_nodes().values(), g_loss)
