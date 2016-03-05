@@ -36,13 +36,14 @@ class VisualiseGAN(Callback):
             i < 15
 
     def on_epoch_end(self, epoch, log={}):
-        if self.should_visualise(epoch+1):
+        epoch = epoch + 1
+        if self.should_visualise(epoch):
             fake = self.model.generate(nb_samples=self.nb_samples)
             fake = self.preprocess(fake)
             tiled_fakes = tile(fake)
             plt.imshow(tiled_fakes[0], cmap='gray')
             plt.grid(False)
-            fname = self.output_dir + "/visual/{:05d}.png".format(epoch)
+            fname = os.path.join(self.output_dir, "{:05d}.png".format(epoch))
             plt.savefig(fname, dpi=200)
 
 
