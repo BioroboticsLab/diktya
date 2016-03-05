@@ -324,13 +324,15 @@ class GAN(AbstractModel):
                   verbose=verbose, callbacks=callbacks, shuffle=False,
                   metrics=list(self.metrics.keys()))
 
-    def generate(self, inputs=None, z_shape=None):
+    def generate(self, inputs=None, z_shape=None, nb_samples=None):
         if inputs is None:
             inputs = {}
         if GAN.z_name not in inputs:
             if None in z_shape:
                 assert None not in self.z_shape
                 z_shape = self.z_shape
+                if nb_samples:
+                    z_shape = (nb_samples, ) + z_shape[1:]
             inputs[GAN.z_name] = np.random.uniform(-1, 1, z_shape)
         ins = [inputs[n] for n in self.graph.input_order
                if n in inputs]
