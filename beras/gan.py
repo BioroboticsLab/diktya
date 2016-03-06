@@ -61,7 +61,9 @@ def gan_linear_losses(d_out_given_fake_for_gen,
 
 
 def sequential_to_gan(generator: Sequential, discriminator: Sequential,
-                      nb_real=32, nb_fake=96):
+                      nb_real=32, nb_fake=96,
+                      nb_fake_for_gen=64,
+                      nb_fake_for_dis=32):
     z_shape = (nb_fake,) + generator.layers[0].input_shape[1:]
     g = Graph()
     g.add_input(GAN.z_name, batch_input_shape=z_shape)
@@ -71,9 +73,10 @@ def sequential_to_gan(generator: Sequential, discriminator: Sequential,
     g.add_input(GAN.real_name, batch_input_shape=real_shape)
     g.add_node(discriminator, "discriminator",
                inputs=[GAN.generator_name, "real"], concat_axis=0)
-    g.add_node(Split(0, 2*nb_fake//3), GAN.dis_out_given_fake_for_gen,
+    g.add_node(Split(0, nb_fake_for_gen), GAN.dis_out_given_fake_for_gen,
                input="discriminator", create_output=True)
-    g.add_node(Split(2*nb_fake//3, nb_fake), GAN.dis_out_given_fake_for_dis,
+    g.add_node(Split(nb_fake - nb_fake_for_dis, nb_fake),
+               GAN.dis_out_given_fake_for_dis,
                input="discriminator", create_output=True)
     g.add_node(Split(nb_fake, nb_fake+nb_real), GAN.dis_out_given_real,
                input="discriminator", create_output=True)
