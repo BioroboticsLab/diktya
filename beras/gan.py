@@ -299,11 +299,10 @@ class GAN(AbstractModel):
             for key, value in zip(self.metrics.keys(), outs):
                 batch_logs[key] = value
 
-        self._fit(train, nb_train_sample=nb_train_sample,
-                  nb_batches=nb_batches,
-                  nb_epoch=nb_epoch,
-                  verbose=verbose, callbacks=callbacks, shuffle=False,
-                  metrics=list(self.metrics.keys()))
+        return self._fit(train, nb_train_sample=nb_train_sample,
+                         nb_batches=nb_batches, nb_epoch=nb_epoch,
+                         verbose=verbose, callbacks=callbacks, shuffle=False,
+                         metrics=list(self.metrics.keys()))
 
     def fit_generator(self, generator, nb_batches_per_epoch,
                       nb_epoch, batch_size=128, verbose=1, callbacks=[]):
@@ -317,12 +316,12 @@ class GAN(AbstractModel):
             for key, value in zip(self.metrics.keys(), outs):
                 batch_logs[key] = value
 
-        self._fit(train,
-                  nb_train_sample=batch_size*nb_batches_per_epoch,
-                  nb_batches=nb_batches_per_epoch,
-                  nb_epoch=nb_epoch,
-                  verbose=verbose, callbacks=callbacks, shuffle=False,
-                  metrics=list(self.metrics.keys()))
+        return self._fit(train,
+                         nb_train_sample=batch_size*nb_batches_per_epoch,
+                         nb_batches=nb_batches_per_epoch,
+                         nb_epoch=nb_epoch, verbose=verbose,
+                         callbacks=callbacks, shuffle=False,
+                         metrics=list(self.metrics.keys()))
 
     def generate(self, inputs=None, z_shape=None, nb_samples=None):
         if inputs is None:
