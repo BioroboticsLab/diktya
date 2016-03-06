@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-import numpy as np
 
-from beras.util import tile
-from keras.callbacks import Callback
 import os
 
+import numpy as np
 import matplotlib.pyplot as plt
 
+from keras.callbacks import Callback
+import keras.backend as K
+
+from beras.util import tile
 
 class VisualiseGAN(Callback):
     def __init__(self, nb_samples, output_dir, preprocess=None):
@@ -72,3 +74,15 @@ class SaveModels(Callback):
                 if self.output_dir is not None:
                     fname = os.path.join(self.output_dir, fname)
                 model.save_weights(fname, self.overwrite)
+
+
+class LearningRateScheduler(Callback):
+    def __init__(self, optimizer, schedule):
+        assert hasattr(optimizer, 'lr')
+        self.optimizer = optimizer
+        self.schedule = schedule
+
+    def on_epoch_end(self, epoch, logs={}):
+        epoch = epoch+1
+        if epoch in self.schedule:
+            K.set_value(self.optimizer.lr, self.schedule[epoch])

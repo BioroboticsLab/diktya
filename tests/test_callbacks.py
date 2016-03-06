@@ -13,10 +13,13 @@
 # limitations under the License.
 #
 
+import numpy as np
 
-from beras.callbacks import SaveModels
+from beras.callbacks import SaveModels, LearningRateScheduler
 from keras.models import Sequential
 from keras.layers.core import Dense
+from keras.optimizers import Adam
+import keras.backend as K
 import os
 import pytest
 
@@ -50,3 +53,28 @@ def test_save_models_output_dir(tmpdir):
     cb = SaveModels({fname: m}, output_dir=str(tmpdir), every_epoch=10)
     cb.on_epoch_end(9)
     assert os.path.exists(os.path.join(str(tmpdir), fname))
+
+
+def test_lr_scheduler():
+    optimizer = Adam(lr=0.1)
+    assert np.allclose(K.get_value(optimizer.lr), 0.1)
+    schedule = {20: 0.01, 100: 0.005, 900: 0.0001}
+    lr_scheduler = LearningRateScheduler(optimizer, schedule)
+
+    lr_scheduler.on_epoch_end(19)
+    assert np.allclose(K.get_value(optimizer.lr), schedule[20])
+
+    lr_scheduler.on_epoch_end(49)
+    assert np.allclose(K.get_value(optimizer.lr), schedule[20])
+
+    lr_scheduler.on_epoch_end(99)
+    assert np.allclose(K.get_value(optimizer.lr), schedule[100])
+
+    lr_scheduler.on_epoch_end(1000)
+    assert np.allclose(K.get_value(optimizer.lr), schedule[100])
+
+    lr_scheduler.on_epoch_end(899)
+    assert np.allclose(K.get_value(optimizer.lr), schedule[900])
+
+    lr_scheduler.on_epoch_end(1000)
+    assert np.allclose(K.get_value(optimizer.lr), schedule[900])
