@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import numpy as np
 
 from beras.util import tile
 from keras.callbacks import Callback
@@ -35,10 +36,15 @@ class VisualiseGAN(Callback):
             (i < 100 and i % 5 == 0) or \
             i < 15
 
-    def on_epoch_end(self, epoch, log={}):
+    def on_train_begin(self, logs={}):
+        z_shape = self.model.z_shape
+        z_shape = (self.nb_samples, ) + z_shape[1:]
+        self.z = np.random.uniform(-1, 1, z_shape)
+
+    def on_epoch_end(self, epoch, logs={}):
         epoch = epoch + 1
         if self.should_visualise(epoch):
-            fake = self.model.generate(nb_samples=self.nb_samples)
+            fake = self.model.generate({'z': self.z})
             fake = self.preprocess(fake)
             tiled_fakes = tile(fake)
             plt.imshow(tiled_fakes[0], cmap='gray')
