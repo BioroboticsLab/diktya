@@ -330,10 +330,11 @@ class GAN(AbstractModel):
         if inputs is None:
             inputs = {}
         if GAN.z_name not in inputs:
-            z_shape = self.z_shape
-            if nb_samples:
-                z_shape = (nb_samples, ) + z_shape[1:]
-            assert None not in self.z_shape
+            if z_shape is None:
+                z_shape = self.z_shape
+                if nb_samples:
+                    z_shape = (nb_samples, ) + z_shape[1:]
+            assert None not in z_shape
             inputs[GAN.z_name] = np.random.uniform(-1, 1, z_shape)
         ins = [inputs[n] for n in self.graph.input_order
                if n in inputs]
