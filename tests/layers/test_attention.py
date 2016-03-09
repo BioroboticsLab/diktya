@@ -18,7 +18,7 @@ from unittest.mock import Mock
 import math
 from keras.layers.convolutional import Convolution2D
 from keras.layers.core import Dense, Flatten, Dropout
-from keras.models import Sequential
+from keras.models import Sequential, Graph
 from seya.data_utils import floatX
 import theano
 
@@ -28,6 +28,7 @@ import numpy as np
 
 def test_rotates_images():
     bs = 3
+    shape = (1, 8, 8)
     img = theano.shared(np.zeros((bs, 1, 8, 8), dtype=floatX))
 
     angle = np.asarray([0, math.pi / 2, math.pi], dtype=floatX)
@@ -38,7 +39,9 @@ def test_rotates_images():
     locnet.layers[0].input = img
     locnet.get_output = Mock(return_value=angle)
     assert locnet.get_output() == angle
-    rot_layer = RotationTransformer(locnet, return_theta=True)
+    rot_layer = RotationTransformer(locnet, return_theta=True,
+                                    input_shape=shape)
+    rot_layer.set_input_shape(shape)
     rot_layer.input = img
     theta = rot_layer.get_output()
     np_theta = theta.eval()
@@ -66,18 +69,20 @@ def get_net():
     rotnet.add(Flatten())
     rotnet.add(Dense(1))
 
-    net = Sequential()
-    net.add(RotationTransformer(rotnet, input_shape=(1, 8, 8)))
-    net.add(Convolution2D(1, 2, 2))
-    net.add(Flatten())
-    net.add(Dense(10))
+    net = Graph()
+    net.add_input('input', input_shape=(1, 8, 8))
+    net.add_node(rotnet, 'rot', input='input')
+    net.add_node(RotationTransformer(rotnet), 'input_rot', input='input')
+    net.add_node(Convolution2D(1, 2, 2), 'conv', input='input_rot')
+    net.add_node(Flatten(), 'flatten', input='conv')
+    net.add_node(Dense(10), 'output', input='flatten', create_output=True)
     return net, rotnet
 
 
 def test_rotnet_predict():
     net, _ = get_net()
-    net.compile("adam", "mse")
-    net.predict(np.random.sample((128, 1, 8, 8)))
+    net.compile("adam", {"output": "mse"})
+    net.predict({'input': np.random.sample((128, 1, 8, 8))})
 
 
 def test_save_and_loads_weights():

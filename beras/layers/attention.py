@@ -12,34 +12,30 @@
 # limitations under the License.
 
 from seya.layers.attention import SpatialTransformer
-from seya.data_utils import floatX
-from seya.utils import apply_model
+from keras.models import Sequential
+from keras.layers.core import Layer
 import theano.tensor as T
-
-
-def apply_model(model, X, train=True):
-    tmp = model.layers[0].input
-    model.layers[0].input = X
-    Y = model.get_output(train)
-    model.layers[0].input = tmp
-    return Y
 
 
 class RotationTransformer(SpatialTransformer):
     '''A Spatial Transformer limitted to rotation '''
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, rot_layer, *args, **kwargs):
+        self.rot_layer = rot_layer
+        fake_model = Sequential()
+        fake_model.add(Layer(input_shape=(1, 1, 1)))
+        super().__init__(fake_model, *args, **kwargs)
 
     def get_output(self, train=False):
         X = self.get_input(train)
-        rot_angle = apply_model(self.locnet, X, train)
+        rot_angle = self.rot_layer.get_output(train)
         rot_angle = rot_angle.reshape((X.shape[0], 1))
 
         # set up rotation matrix
         cos = T.cos(rot_angle)
         sin = T.sin(rot_angle)
         zeros = T.zeros_like(rot_angle)
-        theta = T.concatenate([cos, -sin, zeros, sin, cos, zeros], axis=1).reshape((-1, 2, 3))
+        theta = T.concatenate([cos, -sin, zeros, sin, cos, zeros],
+                              axis=1).reshape((-1, 2, 3))
 
         output = self._transform(theta, X, self.downsample_factor)
         if self.return_theta:
