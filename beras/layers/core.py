@@ -14,6 +14,8 @@
 from keras.layers.core import Layer
 import keras.regularizers
 import keras.constraints
+import keras.backend as K
+import theano.tensor as T
 
 class Split(Layer):
     def __init__(self, start, stop, step=1, **kwargs):
@@ -35,3 +37,19 @@ class Split(Layer):
     def get_output(self, train=False):
         X = self.get_input(train)
         return X[self.start:self.stop:self.step]
+class Swap(Layer):
+    def __init__(self, a, b, **kwargs):
+        super(Swap, self).__init__(**kwargs)
+        self.a = a
+        self.b = b
+        self.trainable_weights = []
+        self.regularizers = []
+        self.constraints = []
+        self.updates = []
+
+    def get_output(self, train=False):
+        X = self.get_input(train)
+        tmp = X[:, self.a]
+        X = T.set_subtensor(X[:, self.a], X[:, self.b])
+        X = T.set_subtensor(X[:, self.b], tmp)
+        return X
