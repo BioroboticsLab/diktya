@@ -12,17 +12,17 @@
 # limitations under the License.
 
 from keras.layers.core import Layer
-import keras.regularizers
-import keras.constraints
 import keras.backend as K
 import theano.tensor as T
 
+
 class Split(Layer):
-    def __init__(self, start, stop, step=1, **kwargs):
+    def __init__(self, start, stop, step=1, axis=0, **kwargs):
         super(Split, self).__init__(**kwargs)
         self.start = start
         self.stop = stop
         self.step = step
+        self.axis = axis
         self.trainable_weights = []
         self.regularizers = []
         self.constraints = []
@@ -31,12 +31,25 @@ class Split(Layer):
     @property
     def output_shape(self):
         shp = self.input_shape
+        new_shp = []
         length = (self.stop - self.start) / abs(self.step)
-        return (length,) + shp[1:]
+        for i in range(len(shp)):
+            if i == self.axis:
+                new_shp.append(length)
+            else:
+                new_shp.append(shp[i])
 
     def get_output(self, train=False):
         X = self.get_input(train)
-        return X[self.start:self.stop:self.step]
+        index = []
+        for i in range(K.ndim(X)):
+            if i == self.axis:
+                index.append(slice(self.start, self.stop, self.step))
+            else:
+                index.append(slice(None, None, 1))
+        return X[tuple(index)]
+
+
 class Swap(Layer):
     def __init__(self, a, b, **kwargs):
         super(Swap, self).__init__(**kwargs)
