@@ -23,6 +23,7 @@ import keras.backend as K
 
 from beras.util import tile
 
+
 class VisualiseGAN(Callback):
     def __init__(self, nb_samples, output_dir, preprocess=None):
         self.nb_samples = nb_samples
@@ -86,3 +87,38 @@ class LearningRateScheduler(Callback):
         epoch = epoch+1
         if epoch in self.schedule:
             K.set_value(self.optimizer.lr, self.schedule[epoch])
+
+
+class AutomaticLearningRateScheduler(Callback):
+    def __init__(self, optimizer, metric, min_improvment=0.001,
+                 epoch_patience=3, factor=0.25):
+        assert hasattr(optimizer, 'lr')
+        self.optimizer = optimizer
+        self.metric = metric
+        self.current_best = np.infty
+        self.current_best_epoch = 0
+        self.min_improvment = min_improvment
+        self.epoch_patience = epoch_patience
+        self.epoch_log = []
+        self.factor = factor
+
+    def on_train_begin(self, logs={}):
+        self.current_best = np.infty
+        self.current_best_epoch = 0
+
+    def on_epoch_start(self, epoch, logs={}):
+        self.epoch_log = []
+
+    def on_batch_end(self, batch, logs={}):
+        self.epoch_log.append(batch[self.metric])
+
+    def on_epoch_end(self, epoch, logs={}):
+        mean_loss = np.array(self.epoch_log).mean()
+        if mean_loss + self.min_improvment <= self.current_best:
+            self.current_best = mean_loss
+            self.current_best_epoch = epoch
+
+        if epoch - self.current_best_epoch > self.epoch_patience:
+            lr = K.get_value(self.optimizer.lr)
+            K.set_value(self.optimizer.lr, lr*self.factor)
+            self.current_best_epoch = epoch
