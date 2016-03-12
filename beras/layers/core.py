@@ -38,6 +38,7 @@ class Split(Layer):
                 new_shp.append(length)
             else:
                 new_shp.append(shp[i])
+        return new_shp
 
     def get_output(self, train=False):
         X = self.get_input(train)
