@@ -25,6 +25,10 @@ class RotationTransformer(SpatialTransformer):
         fake_model.add(Layer(input_shape=(1, 1, 1)))
         super().__init__(fake_model, *args, **kwargs)
 
+    @property
+    def output_shape(self):
+        return self.input_shape
+
     def get_output(self, train=False):
         X = self.get_input(train)
         rot_angle = self.rot_layer.get_output(train)
@@ -42,3 +46,22 @@ class RotationTransformer(SpatialTransformer):
             return theta.reshape((X.shape[0], 2, 3))
         else:
             return output
+
+
+class GraphSpatialTransformer(SpatialTransformer):
+    '''A Spatial Transformer limitted to rotation '''
+    def __init__(self, layer, *args, **kwargs):
+        self.layer = layer
+        fake_model = Sequential()
+        fake_model.add(Layer(input_shape=(1, 1, 1)))
+        super().__init__(fake_model, *args, **kwargs)
+
+    @property
+    def output_shape(self):
+        return self.input_shape
+
+    def get_output(self, train=False):
+        X = self.get_input(train)
+        theta = self.layer.get_output(train)
+        theta = theta.reshape((X.shape[0], 2, 3))
+        return self._transform(theta, X, self.downsample_factor)
