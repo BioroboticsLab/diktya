@@ -25,9 +25,10 @@ from beras.util import tile
 
 
 class VisualiseGAN(Callback):
-    def __init__(self, nb_samples, output_dir, preprocess=None):
+    def __init__(self, nb_samples, output_dir, show=False, preprocess=None):
         self.nb_samples = nb_samples
         self.output_dir = output_dir
+        self.show = show
         self.preprocess = preprocess
         if self.preprocess is None:
             self.preprocess = lambda x: x
@@ -54,6 +55,9 @@ class VisualiseGAN(Callback):
             plt.grid(False)
             fname = os.path.join(self.output_dir, "{:05d}.png".format(epoch))
             plt.savefig(fname, dpi=200)
+            if self.show:
+                plt.show()
+            plt.clf()
 
 
 class SaveModels(Callback):
@@ -101,16 +105,18 @@ class AutomaticLearningRateScheduler(Callback):
         self.epoch_patience = epoch_patience
         self.epoch_log = []
         self.factor = factor
+        self.init_min_improvement = min_improvment
 
     def on_train_begin(self, logs={}):
         self.current_best = np.infty
         self.current_best_epoch = 0
+        self.min_improvment = self.init_min_improvement
 
     def on_epoch_start(self, epoch, logs={}):
         self.epoch_log = []
 
     def on_batch_end(self, batch, logs={}):
-        self.epoch_log.append(batch[self.metric])
+        self.epoch_log.append(logs[self.metric])
 
     def on_epoch_end(self, epoch, logs={}):
         mean_loss = np.array(self.epoch_log).mean()
@@ -120,5 +126,9 @@ class AutomaticLearningRateScheduler(Callback):
 
         if epoch - self.current_best_epoch > self.epoch_patience:
             lr = K.get_value(self.optimizer.lr)
-            K.set_value(self.optimizer.lr, lr*self.factor)
+            new_lr = lr*self.factor
+            self.min_improvment *= self.factor
+            K.set_value(self.optimizer.lr, new_lr)
+            print()
+            print("Reduce learning rate to: {:08f}".format(new_lr))
             self.current_best_epoch = epoch
