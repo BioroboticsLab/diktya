@@ -14,6 +14,7 @@
 from keras.layers.core import Layer
 import keras.backend as K
 import theano.tensor as T
+import theano
 
 
 class Split(Layer):
@@ -67,3 +68,8 @@ class Swap(Layer):
         X = T.set_subtensor(X[:, self.a], X[:, self.b])
         X = T.set_subtensor(X[:, self.b], tmp)
         return X
+
+
+class ZeroGradient(Layer):
+    def get_output(self, train=False):
+        return theano.gradient.zero_grad(self.get_input(train))
