@@ -69,7 +69,7 @@ def sequential_to_gan(generator: Sequential, discriminator: Sequential,
     g.add_input(GAN.z_name, batch_input_shape=z_shape)
     g.add_node(generator, GAN.generator_name, input=GAN.z_name)
 
-    real_shape = (nb_fake,) + g.nodes[GAN.generator_name].output_shape[1:]
+    real_shape = (nb_real,) + g.nodes[GAN.generator_name].output_shape[1:]
     g.add_input(GAN.real_name, batch_input_shape=real_shape)
     g.add_node(discriminator, "discriminator",
                inputs=[GAN.generator_name, "real"], concat_axis=0)
@@ -85,13 +85,16 @@ def sequential_to_gan(generator: Sequential, discriminator: Sequential,
     return gan
 
 
-def add_gan_outputs(graph: Graph, input="discriminator", fake=(0, 64),
+def add_gan_outputs(graph: Graph, input="discriminator", fake_for_gen=(0, 64),
+                    fake_for_dis=(0, 64),
                     real=(64, 128)):
-    graph.add_node(Split(fake[0], fake[1]), GAN.dis_out_given_fake_for_gen,
+    graph.add_node(Split(*fake_for_gen),
+                   GAN.dis_out_given_fake_for_gen,
                    input=input, create_output=True)
-    graph.add_node(Split(fake[0], fake[1]), GAN.dis_out_given_fake_for_dis,
+    graph.add_node(Split(*fake_for_dis),
+                   GAN.dis_out_given_fake_for_dis,
                    input=input, create_output=True)
-    graph.add_node(Split(real[0], real[1]), GAN.dis_out_given_real,
+    graph.add_node(Split(*real), GAN.dis_out_given_real,
                    input=input, create_output=True)
 
 
@@ -168,6 +171,7 @@ class GAN(AbstractModel):
         assert self.dis_out_given_real in self.graph.outputs
 
         self._gan_regularizers = []
+        self.updates = []
         self.metrics = OrderedDict()
 
         self.logger = logging.getLogger("gan.GAN")
@@ -224,13 +228,16 @@ class GAN(AbstractModel):
         self.metrics['d_loss_gen'] = d_loss_gen
         self.metrics['d_loss_real'] = d_loss_real
 
-    def compile(self, g_optimizer: Optimizer, d_optimizer: Optimizer,
-                loss, batch_size=128):
+    def build(self, g_optimizer: Optimizer, d_optimizer: Optimizer,
+              loss):
         def get_updates(optimizer, nodes, loss):
             optimizer = keras.optimizers.get(optimizer)
 
             weights, regularizers, constraints, layer_updates = zip(
                 *[n.get_params() for n in nodes])
+
+            for r in regularizers:
+                loss = r(loss)
 
             updates = optimizer.get_updates(
                 flatten(weights),
@@ -248,10 +255,11 @@ class GAN(AbstractModel):
 
         losses = loss(
             d_out_given_fake_gen, d_out_given_fake_dis, d_out_given_real)
-        self._set_loss_metrics(*losses)
         g_loss, d_loss = losses[:2]
         for r in self._gan_regularizers:
             g_loss, d_loss = r(g_loss, d_loss)
+
+        self._set_loss_metrics(g_loss, d_loss, *losses[2:])
 
         g_updates = get_updates(
             g_optimizer, self.get_generator_nodes().values(), g_loss)
@@ -260,10 +268,23 @@ class GAN(AbstractModel):
 
         ins = [self.graph.inputs[name].input
                for name in self.graph.input_order]
+        return {
+            'g_updates': g_updates,
+            'd_updates': d_updates,
+            'ins': ins,
+            'g_loss': g_loss,
+            'd_loss': d_loss
+        }
 
-        self._train = K.function(ins,
+    def compile(self, g_optimizer: Optimizer, d_optimizer: Optimizer, loss):
+        v = self.build(g_optimizer, d_optimizer, loss)
+        updates = v['g_updates'] + v['d_updates'] + self.updates
+        self._train = K.function(v['ins'],
                                  list(self.metrics.values()),
-                                 updates=g_updates + d_updates)
+                                 updates=updates)
+        self.compile_generate()
+
+    def compile_generate(self):
         gen_ins = [self.graph.inputs[name].input
                    for name in self.graph.input_order
                    if name.startswith("gen") or name == self.z_name]
@@ -276,6 +297,7 @@ class GAN(AbstractModel):
         self._debug = K.function(ins, list(self.debug_dict(train).values()))
 
     def add_gan_regularizer(self, r):
+        r.set_gan(self)
         self._gan_regularizers.append(r)
 
     def fit(self, data, nb_epoch=100, verbose=0, batch_size=128,
