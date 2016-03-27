@@ -26,7 +26,7 @@ from keras.layers.core import Layer
 from keras.backend.common import cast_to_floatx, floatx
 from scipy.misc import imsave
 import skimage.filters
-
+import keras.backend as K
 
 class LossPrinter(Callback):
     def on_epoch_begin(self, epoch, logs={}):
@@ -70,27 +70,15 @@ _gaussian_blur_kernel = np.asarray([[[
 ]]], dtype=floatx())
 
 
-def upsample(input, sigma=4/6, nb_channels=1):
+def upsample(input, sigma=2/3, nb_channels=1):
     if type(input) == list:
         assert len(input) == 1
         input = input[0]
-
-    upsample_layer_weight = gaussian_kernel(sigma)
-    kernel_size = upsample_layer_weight.shape[-1]
-    upsample_layer = Convolution2D(nb_channels, kernel_size, kernel_size,
-                                   border_mode='valid',
-                                   input_shape=(nb_channels, None, None))
-    upsample_layer_weight = upsample_layer_weight.repeat(nb_channels, axis=1)
-    upsample_layer.W = theano.shared(upsample_layer_weight)
-    shp = input.shape
-    upsampled = T.zeros((shp[0], shp[1], 2*shp[2], 2*shp[3]))
-    upsampled = T.set_subtensor(upsampled[:, :, ::2, ::2], input)
-    upsampled = _add_virtual_border(upsampled)
-    upsample_layer.input = upsampled
-    return upsample_layer.get_output(train=False)
+    resized = resize_interpolate(input, scale=0.5)
+    return smooth(resized, sigma, nb_channels=nb_channels)
 
 
-def gaussian_kernel(sigma, size=None, nb_channels=1):
+def np_gaussian_kernel(sigma, size=None, nb_channels=1):
     if size is None:
         size = 2*ceil(2*sigma)+1
     a = np.zeros((size, size))
@@ -110,13 +98,14 @@ def resize_nearest_neighbour(images, scale):
 
 
 def resize_interpolate(input, scale):
-    # from here https://github.com/Lasagne/Lasagne/blob/master/lasagne/layers/special.py
+    # from https://github.com/Lasagne/Lasagne/blob/master/lasagne/layers/special.py
     num_batch, num_channels, height, width = input.shape
 
     out_height = T.cast(height / scale, 'int64')
     out_width = T.cast(width / scale, 'int64')
     theta = theano.shared(np.array([[[1, 0, 0],
-                                     [0, 1, 0]]]))
+                                     [0, 1, 0]]],
+                                   dtype=theano.config.floatX))
     theta = theta.repeat(num_batch, axis=0)
     grid = _meshgrid(out_height, out_width)
     # this could be removed
@@ -191,6 +180,8 @@ def _interpolate(im, x, y, out_height, out_width):
     wc = ((x-x0_f) * (y1_f-y)).dimshuffle(0, 'x')
     wd = ((x-x0_f) * (y-y0_f)).dimshuffle(0, 'x')
     output = T.sum([wa*Ia, wb*Ib, wc*Ic, wd*Id], axis=0)
+
+    assert str(output.dtype) == theano.config.floatX, str(output.dtype)
     return output
 
 
@@ -226,6 +217,117 @@ def _meshgrid(height, width):
     return grid
 
 
+def static_vars(**kwargs):
+    def decorate(func):
+        for k in kwargs:
+            setattr(func, k, kwargs[k])
+        return func
+    return decorate
+
+def gaussian_kernel_default_radius(sigma, window_radius=None):
+    if window_radius is None:
+        return T.ceil(3*sigma)
+    else:
+        return window_radius
+
+
+@static_vars(cache={})
+def gaussian_kernel_1d(sigma, window_radius=None):
+    if (sigma, window_radius) in gaussian_kernel_1d.cache:
+        return gaussian_kernel_1d.cache[(sigma, window_radius)]
+
+    radius = gaussian_kernel_default_radius(sigma, window_radius)
+    index = T.arange(2*radius + 1) - radius
+    kernel = T.exp(-0.5*index**2/sigma**2)
+    kernel = kernel / kernel.sum()
+
+    if type(sigma) in (float, int) and \
+            type(window_radius) in (float, int, type(None)):
+        gaussian_kernel_1d.cache[(sigma, window_radius)] = kernel
+    return T.cast(kernel, 'float32')
+
+
+def add_border(input, border, mode='repeat'):
+    if mode == 'repeat':
+        return add_border_repeat(input, border)
+    elif mode == 'reflect':
+        return add_border_reflect(input, border)
+    else:
+        raise ValueError("Invalid mode: {}".format(mode))
+
+
+def add_border_repeat(input, border):
+    if type(border) is int:
+        border = (border,) * input.ndim
+
+    w_start = input[:, :, :, :1]
+    w_start_padding = T.repeat(w_start, border, axis=3)
+    w_end = input[:, :, :, -1:]
+    w_end_padding = T.repeat(w_end, border, axis=3)
+
+    w_padded = T.concatenate([w_start_padding, input,
+                              w_end_padding], axis=3)
+
+    h_start = w_padded[:, :, :1, :]
+    h_start_padding = T.repeat(h_start, border, axis=2)
+    h_end = w_padded[:, :, -1:, :]
+    h_end_padding = T.repeat(h_end, border, axis=2)
+
+    padded = T.concatenate([h_start_padding, w_padded,
+                            h_end_padding], axis=2)
+    return padded
+
+
+def gaussian_filter_1d(input, sigma, window_radius=40, axis=-1, border_mode='constant'):
+    """
+    Filter 1d input with a Gaussian using mode `nearest`.
+    input is expected to be three dimensional of type n times x times y
+    """
+    ndim = 4
+    assert input.ndim == ndim, \
+        "there must be {} dimensions, got {}".format(ndim, input.ndim)
+
+    dim_pattern = ['x']*input.ndim
+    dim_pattern[axis] = 1
+    window_radius = gaussian_kernel_default_radius(sigma, window_radius)
+    padded_input = add_border_repeat(input, window_radius)
+    filter_1d = gaussian_kernel_1d(sigma, window_radius)
+    filter_W = filter_1d.dimshuffle(dim_pattern)
+
+    filter_shape = [1] * ndim
+    filter_shape[axis] = None
+    blur = T.nnet.conv2d(padded_input, filter_W, border_mode='valid',
+                         filter_shape=filter_shape)
+    return blur
+
+
+def gaussian_filter_2d(input, sigma, window_radius=None,
+                       border_mode='repeat'):
+    """
+    Filter 1d input with a Gaussian using mode `nearest`.
+    input is expected to be three dimensional of type n times x times y
+    """
+    def dimpattern(axis):
+        dim_pattern = ['x']*ndim
+        dim_pattern[axis] = 0
+        return tuple(dim_pattern)
+
+    ndim = 4
+    assert input.ndim == ndim, \
+        "there must be {} dimensions, got {}".format(ndim, input.ndim)
+    window_radius = gaussian_kernel_default_radius(sigma, window_radius)
+    padded_input = add_border(input, window_radius, border_mode)
+    filter_1d = gaussian_kernel_1d(sigma, window_radius)
+    print(dimpattern(-1))
+    filter_w = filter_1d.dimshuffle(dimpattern(-1))
+    blur_w = T.nnet.conv2d(padded_input, filter_w, border_mode='valid',
+                           filter_shape=[1, 1, 1, None])
+    filter_h = filter_1d.dimshuffle(dimpattern(-2))
+    blur = T.nnet.conv2d(blur_w, filter_h, border_mode='valid',
+                         filter_shape=[1, 1, None, 1])
+    return blur
+
+
 def smooth(input, sigma=2/4, add_border=True, nb_channels=1):
     if type(input) == list:
         assert len(input) == 1
@@ -233,63 +335,64 @@ def smooth(input, sigma=2/4, add_border=True, nb_channels=1):
     kernel = gaussian_kernel(sigma, nb_channels=nb_channels)
     size = kernel.shape[-1]
     if add_border:
-        input = _add_virtual_border(input, filter_size=size)
+        input = add_border_reflect(input, size//2)
     smooth_layer = Convolution2D(nb_channels, size, size, border_mode='valid',
                                  input_shape=(1, None, None))
-    smooth_layer.W = theano.shared(cast_to_floatx(kernel))
+    smooth_layer.build()
+    smooth_layer.W.set_value(kernel)
     smooth_layer.input = input
     return smooth_layer.get_output(train=False)
 
 
 class BorderReflect(Layer):
-    def __init__(self, filter_size=5, **kwargs):
+    def __init__(self, border, **kwargs):
+        from warnings import warn
         super().__init__(**kwargs)
-        self.filter_size = filter_size
+        warn("Meaning of filter_size has changed")
+        self.border = border
 
     def get_output(self, train=False):
-        return _add_virtual_border(self.get_input(train), self.filter_size)
+        return add_border_reflect(self.get_input(train), self.border)
 
     @property
     def output_shape(self):
         shp = self.input_shape
-        f = self.filter_size
-        return shp[:2] + (shp[2] + f - 1, shp[3] + f - 1)
+        b = self.border
+        return shp[:2] + (shp[2] + 2*b, shp[3] + 2*b)
 
 
-def _add_virtual_border(input, filter_size=5):
+def add_border_reflect(input, border):
     """Reflects the border like OpenCV BORDER_REFLECT_101. See here
     http://docs.opencv.org/2.4/modules/imgproc/doc/filtering.html"""
 
     shp = input.shape
-    assert filter_size % 2 == 1, "only works with odd filters"
-    half = (filter_size - 1) // 2
-    wb = T.zeros((shp[0], shp[1], shp[2]+2*half, shp[3]+2*half))
-    wb = T.set_subtensor(wb[:, :, half:shp[2]+half, half:shp[3]+half], input)
+    wb = T.zeros((shp[0], shp[1], shp[2]+2*border, shp[3]+2*border))
+    wb = T.set_subtensor(wb[:, :, border:shp[2]+border, border:shp[3]+border], input)
 
-    top = input[:, :, 1:half+1, :]
-    wb = T.set_subtensor(wb[:, :, :half, half:shp[3]+half], top[:, :, ::-1, :])
+    top = input[:, :, 1:border+1, :]
+    wb = T.set_subtensor(wb[:, :, :border, border:shp[3]+border], top[:, :, ::-1, :])
 
-    bottom = input[:, :, -half-1:-1, :]
-    wb = T.set_subtensor(wb[:, :, -half:, half:shp[3]+half], bottom[:, :, ::-1, :])
+    bottom = input[:, :, -border-1:-1, :]
+    wb = T.set_subtensor(wb[:, :, -border:, border:shp[3]+border], bottom[:, :, ::-1, :])
 
-    left = input[:, :, :, 1:half+1]
-    wb = T.set_subtensor(wb[:, :, half:shp[2]+half, :half], left[:, :, :, ::-1])
+    left = input[:, :, :, 1:border+1]
+    wb = T.set_subtensor(wb[:, :, border:shp[2]+border, :border], left[:, :, :, ::-1])
 
-    right = input[:, :, :, -half-1:-1]
-    wb = T.set_subtensor(wb[:, :, half:shp[2]+half, -half:], right[:, :, :, ::-1])
+    right = input[:, :, :, -border-1:-1]
+    wb = T.set_subtensor(wb[:, :, border:shp[2]+border, -border:], right[:, :, :, ::-1])
 
-    left_top = input[:, :, 1:half+1, 1:half+1]
-    wb = T.set_subtensor(wb[:, :, :half, :half], left_top[:, :, ::-1, ::-1])
-    left_bottom = input[:, :, -half-1:-1, 1:half+1]
-    wb = T.set_subtensor(wb[:, :, -half:, :half], left_bottom[:, :, ::-1, ::-1])
-    right_bottom = input[:, :, 1:half+1, -half-1:-1]
-    wb = T.set_subtensor(wb[:, :, :half, -half:], right_bottom[:, :, ::-1, ::-1])
-    right_top = input[:, :, -half-1:-1, -half-1:-1]
-    wb = T.set_subtensor(wb[:, :, -half:, -half:], right_top[:, :, ::-1, ::-1])
+    left_top = input[:, :, 1:border+1, 1:border+1]
+    wb = T.set_subtensor(wb[:, :, :border, :border], left_top[:, :, ::-1, ::-1])
+    left_bottom = input[:, :, -border-1:-1, 1:border+1]
+    wb = T.set_subtensor(wb[:, :, -border:, :border], left_bottom[:, :, ::-1, ::-1])
+    right_bottom = input[:, :, 1:border+1, -border-1:-1]
+    wb = T.set_subtensor(wb[:, :, :border, -border:], right_bottom[:, :, ::-1, ::-1])
+    right_top = input[:, :, -border-1:-1, -border-1:-1]
+    wb = T.set_subtensor(wb[:, :, -border:, -border:], right_top[:, :, ::-1, ::-1])
     return wb
 
 
-def sobel(img):
+def sobel(img, add_border=False):
     conv_x = Convolution2D(1, 3, 3, border_mode='valid',
                            input_shape=(1, None, None))
     conv_y = Convolution2D(1, 3, 3, border_mode='valid',
@@ -299,6 +402,8 @@ def sobel(img):
         [2, 0, -2],
         [1, 0, -1],
     ]))
+    if add_border:
+        img = add_border_reflect(img, border=3)
     conv_x.W = theano.shared(filter[np.newaxis, np.newaxis])
     conv_y.W = theano.shared(np.transpose(filter)[np.newaxis, np.newaxis])
     conv_x.input = img
@@ -318,7 +423,7 @@ def downsample(input, nb_channels=1):
     downsample_layer_weight = downsample_layer_weight \
         .repeat(nb_channels, axis=1)
     downsample_layer.W = theano.shared(downsample_layer_weight)
-    input = _add_virtual_border(input)
+    input = add_border_reflect(input, border=2)
     downsample_layer.input = input
     return downsample_layer.get_output(train=False)
 

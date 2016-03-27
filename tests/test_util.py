@@ -24,12 +24,14 @@ import skimage
 import skimage.transform
 import theano
 import numpy as np
-from beras.util import _add_virtual_border, downsample, upsample, tile, \
-    smooth, sobel
+from beras.util import add_border_reflect, downsample, upsample, tile, \
+    smooth, sobel, gaussian_filter_2d
 import matplotlib.pyplot as plt
 import theano.tensor as T
 import skimage.data
 import skimage.color
+import skimage.filters
+
 
 @pytest.fixture
 def astronaut():
@@ -44,11 +46,11 @@ def plt_save_and_maybe_show(fname):
         plt.show()
 
 
-def test_add_border():
+def test_add_border_reflect():
     filter_size = 7
     half = (filter_size - 1) // 2
     x = theano.shared(np.random.sample((3, 1, 64, 64)))
-    x_with_border = _add_virtual_border(x, filter_size).eval()
+    x_with_border = add_border_reflect(x, filter_size).eval()
     v = x.get_value()
     top = v[:, :, 1:half+1, :]
     np.testing.assert_allclose(
@@ -67,7 +69,7 @@ def test_benchmark_add_border():
     filter_size = 7
     # x = T.tensor4()
     x = theano.shared(np.random.sample((128, 1, 64, 64)))
-    x_with_border = _add_virtual_border(x, filter_size)
+    x_with_border = add_border_reflect(x, filter_size)
     add_border = theano.function([], [x_with_border])
     t = Timer(lambda: add_border())
     n = 500
@@ -75,7 +77,7 @@ def test_benchmark_add_border():
 
 
 def test_sobel(astronaut):
-    x = theano.shared(astronaut[np.newaxis, np.newaxis])
+    x = theano.shared(astronaut[np.newaxis, np.newaxis].astype(np.float32))
     sobel_x, sobel_y = [s.eval() for s in sobel(x)]
     plt.subplot(131)
     plt.imshow(x.get_value()[0, 0, :])
@@ -96,7 +98,21 @@ def test_smooth(astronaut):
     plt.subplot(122)
     plt.imshow(smoothed[0, 0, :])
     plt_save_and_maybe_show("test_smooth.png")
-    plt.show()
+
+
+def test_gaussian_filter_2d(astronaut):
+    astronaut = astronaut[::2, ::2]
+    img = theano.shared(astronaut[np.newaxis, np.newaxis])
+    sigma = 3
+    blur = gaussian_filter_2d(img, sigma)
+    blur = blur.eval().reshape(64, 64)
+    expected = skimage.filters.gaussian_filter(astronaut, sigma)
+    np.testing.assert_allclose(blur, expected, rtol=0.01, atol=0.02)
+    plt.subplot(121)
+    plt.imshow(blur, cmap='gray')
+    plt.subplot(122)
+    plt.imshow(expected, cmap='gray')
+    plt_save_and_maybe_show("test_gaussian_blur_2d.png")
 
 
 def test_downsample(astronaut):
