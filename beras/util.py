@@ -224,6 +224,7 @@ def static_vars(**kwargs):
         return func
     return decorate
 
+
 def gaussian_kernel_default_radius(sigma, window_radius=None):
     if window_radius is None:
         return T.ceil(3*sigma)
@@ -302,7 +303,7 @@ def gaussian_filter_1d(input, sigma, window_radius=40, axis=-1, border_mode='con
 
 
 def gaussian_filter_2d(input, sigma, window_radius=None,
-                       border_mode='repeat'):
+                       border_mode='repeat', nb_channels=1):
     """
     Filter 1d input with a Gaussian using mode `nearest`.
     input is expected to be three dimensional of type n times x times y
@@ -312,19 +313,22 @@ def gaussian_filter_2d(input, sigma, window_radius=None,
         dim_pattern[axis] = 0
         return tuple(dim_pattern)
 
+    def filter_one_channel(channel_idx):
+        filter_w = filter_1d.dimshuffle(dimpattern(-1))
+        blur_w = T.nnet.conv2d(padded_input[:, channel_idx:channel_idx + 1],
+                               filter_w, border_mode='valid',
+                               filter_shape=[1, 1, 1, None])
+        filter_h = filter_1d.dimshuffle(dimpattern(-2))
+        return T.nnet.conv2d(blur_w, filter_h, border_mode='valid',
+                             filter_shape=[1, 1, None, 1])
     ndim = 4
     assert input.ndim == ndim, \
         "there must be {} dimensions, got {}".format(ndim, input.ndim)
     window_radius = gaussian_kernel_default_radius(sigma, window_radius)
     padded_input = add_border(input, window_radius, border_mode)
     filter_1d = gaussian_kernel_1d(sigma, window_radius)
-    print(dimpattern(-1))
-    filter_w = filter_1d.dimshuffle(dimpattern(-1))
-    blur_w = T.nnet.conv2d(padded_input, filter_w, border_mode='valid',
-                           filter_shape=[1, 1, 1, None])
-    filter_h = filter_1d.dimshuffle(dimpattern(-2))
-    blur = T.nnet.conv2d(blur_w, filter_h, border_mode='valid',
-                         filter_shape=[1, 1, None, 1])
+    blur, _ = theano.scan(filter_one_channel,
+                          sequences=T.arange(nb_channels), n_steps=nb_channels)
     return blur
 
 
