@@ -25,7 +25,8 @@ import skimage.transform
 import theano
 import numpy as np
 from beras.util import add_border_reflect, downsample, upsample, tile, \
-    smooth, sobel, gaussian_filter_2d
+    smooth, sobel, gaussian_filter_2d, gaussian_filter_2d_variable_sigma, \
+    gaussian_kernel_1d
 import matplotlib.pyplot as plt
 import theano.tensor as T
 import skimage.data
@@ -100,6 +101,17 @@ def test_smooth(astronaut):
     plt_save_and_maybe_show("test_smooth.png")
 
 
+def test_gaussian_kernel_1d():
+    def to_theano(x):
+        return theano.shared(np.array(x, dtype=np.float32))
+
+    kernel = gaussian_kernel_1d(to_theano([3]), window_radius=10)
+    assert kernel.eval().shape == (1, 21)
+
+    kernel = gaussian_kernel_1d(to_theano([3, 2]), window_radius=10)
+    assert kernel.eval().shape == (2, 21)
+
+
 def test_gaussian_filter_2d(astronaut):
     astronaut = astronaut[::2, ::2]
     astronaut_stacked = np.stack([astronaut, astronaut.T])
@@ -123,6 +135,32 @@ def test_gaussian_filter_2d(astronaut):
     plt.imshow(expected_transposed, cmap='gray')
 
     plt_save_and_maybe_show("test_gaussian_blur_2d.png")
+
+
+def test_gaussian_filter_2d_variable_sigma(astronaut):
+    astronaut = astronaut[::2, ::2]
+    astronaut_stacked = np.stack([astronaut, astronaut.T])
+    img = theano.shared(astronaut_stacked[:, np.newaxis])
+    sigmas = np.array([3, 1], dtype=np.float32)
+    blur = gaussian_filter_2d_variable_sigma(img, theano.shared(sigmas))
+    blur = blur.eval().reshape(2, 64, 64)
+    expected = skimage.filters.gaussian_filter(astronaut, float(sigmas[0]))
+    expected_transposed = skimage.filters.gaussian_filter(astronaut.T,
+                                                          float(sigmas[1]))
+    np.testing.assert_allclose(blur[0], expected, rtol=0.01, atol=0.02)
+    np.testing.assert_allclose(blur[1], expected_transposed,
+                               rtol=0.01, atol=0.02)
+    plt.subplot(221)
+    plt.imshow(blur[0], cmap='gray')
+    plt.subplot(222)
+    plt.imshow(expected, cmap='gray')
+
+    plt.subplot(223)
+    plt.imshow(blur[1], cmap='gray')
+    plt.subplot(224)
+    plt.imshow(expected_transposed, cmap='gray')
+
+    plt_save_and_maybe_show("test_gaussian_blur_2d_variable_sigmas.png")
 
 
 def test_downsample(astronaut):

@@ -227,7 +227,7 @@ def static_vars(**kwargs):
 
 def gaussian_kernel_default_radius(sigma, window_radius=None):
     if window_radius is None:
-        return T.ceil(3*sigma)
+        return T.cast(T.max(T.ceil(3*sigma)), 'int32')
     else:
         return window_radius
 
@@ -237,10 +237,16 @@ def gaussian_kernel_1d(sigma, window_radius=None):
     if (sigma, window_radius) in gaussian_kernel_1d.cache:
         return gaussian_kernel_1d.cache[(sigma, window_radius)]
 
+    if type(sigma) in (float, int):
+        sigma = T.as_tensor_variable(sigma).reshape((1,))
+    nb_sigmas = sigma.shape[0]
+    sigma = sigma.reshape((nb_sigmas, 1))
     radius = gaussian_kernel_default_radius(sigma, window_radius)
     index = T.arange(2*radius + 1) - radius
+    index = T.cast(index, 'float32')
+    index = T.tile(index, nb_sigmas).reshape((nb_sigmas, 2*radius+1))
     kernel = T.exp(-0.5*index**2/sigma**2)
-    kernel = kernel / kernel.sum()
+    kernel = kernel / kernel.sum(axis=1).dimshuffle(0, 'x')
 
     if type(sigma) in (float, int) and \
             type(window_radius) in (float, int, type(None)):
@@ -279,7 +285,8 @@ def add_border_repeat(input, border):
     return padded
 
 
-def gaussian_filter_1d(input, sigma, window_radius=40, axis=-1, border_mode='constant'):
+def gaussian_filter_1d(input, sigma, window_radius=40, axis=-1,
+                       border_mode='constant'):
     """
     Filter 1d input with a Gaussian using mode `nearest`.
     input is expected to be three dimensional of type n times x times y
@@ -304,21 +311,14 @@ def gaussian_filter_1d(input, sigma, window_radius=40, axis=-1, border_mode='con
 
 def gaussian_filter_2d(input, sigma, window_radius=None,
                        border_mode='repeat', nb_channels=1):
-    """
-    Filter 1d input with a Gaussian using mode `nearest`.
-    input is expected to be three dimensional of type n times x times y
-    """
-    def dimpattern(axis):
-        dim_pattern = ['x']*ndim
-        dim_pattern[axis] = 0
-        return tuple(dim_pattern)
-
     def filter_one_channel(channel_idx):
-        filter_w = filter_1d.dimshuffle(dimpattern(-1))
+        dimpattern_w = ('x', 'x', 0, 1)
+        dimpattern_h = ('x', 'x', 1, 0)
+        filter_w = filter_1d.dimshuffle(dimpattern_w)
         blur_w = T.nnet.conv2d(padded_input[:, channel_idx:channel_idx + 1],
                                filter_w, border_mode='valid',
                                filter_shape=[1, 1, 1, None])
-        filter_h = filter_1d.dimshuffle(dimpattern(-2))
+        filter_h = filter_1d.dimshuffle(dimpattern_h)
         return T.nnet.conv2d(blur_w, filter_h, border_mode='valid',
                              filter_shape=[1, 1, None, 1])
     ndim = 4
@@ -332,20 +332,35 @@ def gaussian_filter_2d(input, sigma, window_radius=None,
     return blur
 
 
+def gaussian_filter_2d_variable_sigma(input, sigmas, window_radius=None):
+    def filter_sigma(idx, kernel):
+        dimpattern_w = ('x', 'x', 'x', 0)
+        dimpattern_h = ('x', 'x', 0, 'x')
+        filter_w = kernel.dimshuffle(dimpattern_w)
+        blur_w = T.nnet.conv2d(padded_input[idx:idx+1],
+                               filter_w, border_mode='valid',
+                               filter_shape=[1, 1, 1, None])
+        filter_h = kernel.dimshuffle(dimpattern_h)
+        return T.nnet.conv2d(blur_w, filter_h, border_mode='valid',
+                             filter_shape=[1, 1, None, 1])
+    ndim = 4
+    border_mode = 'repeat'
+    assert input.ndim == ndim, \
+        "there must be {} dimensions, got {}".format(ndim, input.ndim)
+    window_radius = gaussian_kernel_default_radius(sigmas, window_radius)
+    padded_input = add_border(input, window_radius, border_mode)
+    kernel = gaussian_kernel_1d(sigmas, window_radius)
+    blur, _ = theano.map(
+        filter_sigma,
+        sequences=[T.arange(sigmas.shape[0]), kernel])
+    return blur.reshape(input.shape)
+
+
 def smooth(input, sigma=2/4, add_border=True, nb_channels=1):
     if type(input) == list:
         assert len(input) == 1
         input = input[0]
-    kernel = gaussian_kernel(sigma, nb_channels=nb_channels)
-    size = kernel.shape[-1]
-    if add_border:
-        input = add_border_reflect(input, size//2)
-    smooth_layer = Convolution2D(nb_channels, size, size, border_mode='valid',
-                                 input_shape=(1, None, None))
-    smooth_layer.build()
-    smooth_layer.W.set_value(kernel)
-    smooth_layer.input = input
-    return smooth_layer.get_output(train=False)
+    return gaussian_filter_2d(input, sigma)
 
 
 class BorderReflect(Layer):
