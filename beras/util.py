@@ -61,6 +61,17 @@ class Sample(keras.callbacks.Callback):
                    (sample[i]*255).reshape(3, 16, 16).astype(np.uint8))
 
 
+def get_output(layer, train, cache=None):
+    layer_id = '%s_%s' % (id(layer), train)
+    if cache is not None:
+        if layer_id in cache:
+            return cache[layer_id]
+    output = layer.get_output(train=train)
+    if cache is not None:
+        cache[layer_id] = output
+    return output
+
+
 _gaussian_blur_kernel = np.asarray([[[
     [1., 4., 6., 4., 1.],
     [4., 16., 24., 16., 4.],
@@ -356,11 +367,11 @@ def gaussian_filter_2d_variable_sigma(input, sigmas, window_radius=None):
     return blur.reshape(input.shape)
 
 
-def smooth(input, sigma=2/4, add_border=True, nb_channels=1):
+def smooth(input, sigma=2/4, nb_channels=1):
     if type(input) == list:
         assert len(input) == 1
         input = input[0]
-    return gaussian_filter_2d(input, sigma)
+    return gaussian_filter_2d(input, sigma, nb_channels=nb_channels)
 
 
 class BorderReflect(Layer):
