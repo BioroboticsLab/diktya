@@ -404,11 +404,12 @@ def gaussian_filter_2d_variable_sigma(input, sigmas, window_radius=None):
     return blur.reshape(input.shape)
 
 
-def smooth(input, sigma=2/4, nb_channels=1):
+def smooth(input, sigma=2/4, nb_channels=1, window_radius=None):
     if type(input) == list:
         assert len(input) == 1
         input = input[0]
-    return gaussian_filter_2d(input, sigma, nb_channels=nb_channels)
+    return gaussian_filter_2d(input, sigma, nb_channels=nb_channels,
+                              window_radius=window_radius)
 
 
 class BorderReflect(Layer):
