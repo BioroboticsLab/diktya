@@ -238,31 +238,35 @@ def static_vars(**kwargs):
 
 def gaussian_kernel_default_radius(sigma, window_radius=None):
     if window_radius is None:
-        return T.cast(T.max(T.ceil(3*sigma)), 'int32')
+        radius = T.cast(T.max(T.ceil(3*sigma)), 'int32')
+        if type(sigma) in (float, int):
+            return int(radius.eval())
+        else:
+            return radius
     else:
         return window_radius
 
 
-@static_vars(cache={})
 def gaussian_kernel_1d(sigma, window_radius=None):
-    if (sigma, window_radius) in gaussian_kernel_1d.cache:
-        return gaussian_kernel_1d.cache[(sigma, window_radius)]
-
     if type(sigma) in (float, int):
-        sigma = T.as_tensor_variable(sigma).reshape((1,))
+        sigma = T.as_tensor_variable(sigma)
+    if sigma.ndim == 0:
+        sigma = sigma.reshape((1,))
     nb_sigmas = sigma.shape[0]
     sigma = sigma.reshape((nb_sigmas, 1))
     radius = gaussian_kernel_default_radius(sigma, window_radius)
     index = T.arange(2*radius + 1) - radius
     index = T.cast(index, 'float32')
     index = T.tile(index, nb_sigmas).reshape((nb_sigmas, 2*radius+1))
+    index = disconnected_grad(index)
     kernel = T.exp(-0.5*index**2/sigma**2)
     kernel = kernel / kernel.sum(axis=1).dimshuffle(0, 'x')
-
+    kernel = T.cast(kernel, 'float32')
     if type(sigma) in (float, int) and \
             type(window_radius) in (float, int, type(None)):
-        gaussian_kernel_1d.cache[(sigma, window_radius)] = kernel
-    return T.cast(kernel, 'float32')
+        evaluated_kernel = T.as_cuda_or_tensor_variable(kernel.eval())
+        return evaluated_kernel
+    return kernel
 
 
 def add_border(input, border, mode='repeat'):
