@@ -321,7 +321,7 @@ def gaussian_filter_1d(input, sigma, window_radius=40, axis=-1,
 
 
 def gaussian_filter_2d(input, sigma, window_radius=None,
-                       border_mode='repeat', nb_channels=1):
+                       border_mode='reflect', nb_channels=1):
     def filter_one_channel(channel_idx):
         dimpattern_w = ('x', 'x', 0, 1)
         dimpattern_h = ('x', 'x', 1, 0)
@@ -355,7 +355,7 @@ def gaussian_filter_2d_variable_sigma(input, sigmas, window_radius=None):
         return T.nnet.conv2d(blur_w, filter_h, border_mode='valid',
                              filter_shape=[1, 1, None, 1])
     ndim = 4
-    border_mode = 'repeat'
+    border_mode = 'reflect'
     assert input.ndim == ndim, \
         "there must be {} dimensions, got {}".format(ndim, input.ndim)
     window_radius = gaussian_kernel_default_radius(sigmas, window_radius)
