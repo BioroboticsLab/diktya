@@ -117,7 +117,19 @@ def resize_nearest_neighbour(images, scale):
     return images[:, :, ::scale, ::scale]
 
 
+@static_vars(op=None)
 def resize_interpolate(input, scale):
+    if resize_interpolate.op is None:
+        g_input = T.tensor4()
+        g_scale = T.scalar()
+        resize_interpolate.op = theano.OpFromGraph(
+            [g_input, g_scale],
+            [resize_interpolate_graph(g_input, g_scale)])
+    scale = T.cast(T.as_tensor_variable(scale), 'float32')
+    return resize_interpolate.op(input, scale)
+
+
+def resize_interpolate_graph(input, scale):
     # from https://github.com/Lasagne/Lasagne/blob/master/lasagne/layers/special.py
     num_batch, num_channels, height, width = input.shape
 
@@ -235,14 +247,6 @@ def _meshgrid(height, width):
     ones = T.ones_like(x_t_flat)
     grid = T.concatenate([x_t_flat, y_t_flat, ones], axis=0)
     return grid
-
-
-def static_vars(**kwargs):
-    def decorate(func):
-        for k in kwargs:
-            setattr(func, k, kwargs[k])
-        return func
-    return decorate
 
 
 def gaussian_kernel_default_radius(sigma, window_radius=None):
