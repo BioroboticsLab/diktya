@@ -26,7 +26,16 @@ from keras.layers.core import Layer
 from keras.backend.common import cast_to_floatx, floatx
 from scipy.misc import imsave
 import skimage.filters
-import keras.backend as K
+from theano.gradient import disconnected_grad
+
+
+def static_vars(**kwargs):
+    def decorate(func):
+        for k in kwargs:
+            setattr(func, k, kwargs[k])
+        return func
+    return decorate
+
 
 class LossPrinter(Callback):
     def on_epoch_begin(self, epoch, logs={}):
@@ -324,8 +333,8 @@ def gaussian_filter_1d(input, sigma, window_radius=40, axis=-1,
     return blur
 
 
-def gaussian_filter_2d(input, sigma, window_radius=None,
-                       border_mode='reflect', nb_channels=1):
+def gaussian_filter_2d_graph(input, sigma, window_radius=None,
+                             border_mode='reflect', nb_channels=1):
     def filter_one_channel(channel_idx):
         dimpattern_w = ('x', 'x', 0, 1)
         dimpattern_h = ('x', 'x', 1, 0)
@@ -343,8 +352,32 @@ def gaussian_filter_2d(input, sigma, window_radius=None,
     padded_input = add_border(input, window_radius, border_mode)
     filter_1d = gaussian_kernel_1d(sigma, window_radius)
     blur, _ = theano.scan(filter_one_channel,
-                          sequences=T.arange(nb_channels), n_steps=nb_channels)
-    return blur
+                          sequences=T.arange(nb_channels),
+                          n_steps=nb_channels)
+    return blur[:, :, 0].dimshuffle(1, 0, 2, 3)
+
+
+@static_vars(op=None)
+def gaussian_filter_2d(input, sigma, window_radius=None, nb_channels=1):
+    if gaussian_filter_2d.op is None:
+        g_input = T.tensor4()
+        g_simga = T.scalar()
+        g_radius = T.iscalar()
+        g_nb_channels = T.iscalar()
+        gaussian_filter_2d.op = theano.OpFromGraph(
+            [g_input, g_simga, g_radius, g_nb_channels],
+            [gaussian_filter_2d_graph(g_input, g_simga, g_radius,
+                                      nb_channels=g_nb_channels)],
+            connection_pattern=[[True], [True], [False], [False]]
+        )
+
+    window_radius = gaussian_kernel_default_radius(sigma, window_radius)
+    sigma = T.cast(T.as_tensor_variable(sigma), 'float32')
+    window_radius = T.cast(theano.gradient.disconnected_grad(
+        T.as_tensor_variable(window_radius)), 'int32')
+    nb_channels = T.cast(theano.gradient.disconnected_grad(
+        T.as_tensor_variable(nb_channels)), 'int32')
+    return gaussian_filter_2d.op(input, sigma, window_radius, nb_channels)
 
 
 def gaussian_filter_2d_variable_sigma(input, sigmas, window_radius=None):
