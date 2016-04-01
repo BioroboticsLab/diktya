@@ -15,6 +15,7 @@ from keras.layers.core import Layer
 import keras.backend as K
 import theano.tensor as T
 import theano
+from beras.regularizers import ActivityInBoundsRegularizer
 
 
 class Split(Layer):
@@ -73,3 +74,21 @@ class Swap(Layer):
 class ZeroGradient(Layer):
     def get_output(self, train=False):
         return theano.gradient.zero_grad(self.get_input(train))
+
+
+class LinearInBounds(Layer):
+    def __init__(self, low=-1, high=1, clip=False, **kwargs):
+        self.act_reg = ActivityInBoundsRegularizer(low, high)
+        self.clip = clip
+        super().__init__(**kwargs)
+
+    def build(self):
+        self.act_reg.set_layer(self.previous)
+        self.regularizers = [self.act_reg]
+
+    def get_output(self, train=False):
+        X = self.get_input(train=train)
+        if self.clip:
+            return K.clip(X, self.act_reg.low, self.act_reg.high)
+        else:
+            return X

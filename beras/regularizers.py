@@ -23,9 +23,9 @@ class ActivityInBoundsRegularizer(Regularizer):
         self.high = high
 
     def __call__(self, loss):
-        activation = self.layer.get_output(True)
-        l = K.switch(activation < self.low, (activation - self.low)**2, 0)
-        h = K.switch(activation > self.high, (activation - self.high)**2, 0)
+        activation = self.layer.get_input(True)
+        l = K.switch(activation < self.low, K.abs(activation - self.low), 0)
+        h = K.switch(activation > self.high, K.abs(activation - self.high), 0)
         return loss + K.sum(h + l)
 
     def get_config(self):
