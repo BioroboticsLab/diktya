@@ -34,3 +34,21 @@ class ActivityInBoundsRegularizer(Regularizer):
             "low": self.low,
             "high": self.high
         }
+
+
+class SumBelow(Regularizer):
+    def __init__(self, max_sum):
+        self.max_sum = K.variable(max_sum)
+
+    def __call__(self, loss):
+        activation = self.layer.get_output(True)
+        axes = (i for i in range(1, len(self.layer.output_shape)))
+        sum = K.sum(activation, axis=axes)
+        too_big = K.switch(sum > self.max_sum, K.abs(self.max_sum - sum), 0)
+        return loss + K.sum(too_big)
+
+    def get_config(self):
+        return {
+            "name": self.__class__.__name__,
+            "max_sum": self.max_sum,
+        }
