@@ -15,13 +15,13 @@
 from math import ceil
 from math import sqrt
 
-from keras.layers.convolutional import Convolution2D
 import numpy as np
 import theano
 import theano.tensor as T
 
 from beras.util import add_border_reflect
 from beras.filters import gaussian_filter_2d, np_gaussian_kernel_2d
+import keras.backend as K
 
 
 def upsample(input, sigma=2/3):
@@ -38,14 +38,12 @@ def downsample(input, nb_channels=1):
         input = input[0]
     assert nb_channels == 1
 
-    downsample_layer = Convolution2D(nb_channels, 5, 5, subsample=(2, 2),
-                                     border_mode='valid',
-                                     input_shape=(1, None, None))
-    kernel = np_gaussian_kernel_2d(sigma=2/3, window_radius=2)
-    downsample_layer.W = T.as_tensor_variable(kernel.reshape(1, 1, 5, 5))
+    filter_shape = (1, 1, 5, 5)
+    np_kernel = np_gaussian_kernel_2d(sigma=2/3, window_radius=2)
+    kernel = T.as_tensor_variable(np_kernel.reshape(filter_shape))
     input = add_border_reflect(input, border=2)
-    downsample_layer.input = input
-    return downsample_layer.get_output(train=False)
+    return K.conv2d(input, kernel, strides=(2, 2), filter_shape=filter_shape,
+                    image_shape=(None, 1, None, None))
 
 
 def tile(tiles, columns_must_be_multiple_of=1):
