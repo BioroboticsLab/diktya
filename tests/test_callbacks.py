@@ -15,7 +15,8 @@
 
 import numpy as np
 
-from beras.callbacks import SaveModels, LearningRateScheduler
+from beras.callbacks import SaveModels, LearningRateScheduler, \
+    AutomaticLearningRateScheduler
 from keras.models import Sequential
 from keras.layers.core import Dense
 from keras.optimizers import Adam
@@ -78,3 +79,24 @@ def test_lr_scheduler():
 
     lr_scheduler.on_epoch_end(1000)
     assert np.allclose(K.get_value(optimizer.lr), schedule[900])
+
+
+def test_automatic_lr_scheduler():
+    optimizer = Adam(lr=0.1)
+    lr_scheduler = AutomaticLearningRateScheduler(optimizer, 'loss')
+    lr_scheduler.on_train_begin()
+    for i in range(3):
+        lr_scheduler.on_epoch_begin(i)
+        lr_scheduler.on_batch_end(0, {'loss': 1/(i+1)})
+        lr_scheduler.on_epoch_end(i)
+    o = 3
+    assert np.allclose(K.get_value(optimizer.lr), 0.1)
+
+    for i in range(o, o+5):
+        print(i)
+        lr_scheduler.on_epoch_begin(i)
+        lr_scheduler.on_batch_end(0, {'loss': 1})
+        lr_scheduler.on_epoch_end(i)
+    print(lr_scheduler.current_best)
+    print(lr_scheduler.current_best_epoch)
+    assert np.allclose(K.get_value(optimizer.lr), 0.1 * lr_scheduler.factor)

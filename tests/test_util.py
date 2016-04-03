@@ -11,15 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
 import random
 from timeit import Timer
 
 import pytest
 from keras.backend.common import cast_to_floatx
-from tests import visual_debug, TEST_OUTPUT_DIR
 from colorsys import hsv_to_rgb
-import scipy
 import skimage
 import skimage.transform
 import theano
@@ -28,10 +25,10 @@ from beras.util import add_border_reflect, downsample, upsample, tile, \
     smooth, sobel, gaussian_filter_2d, gaussian_filter_2d_variable_sigma, \
     gaussian_kernel_1d
 import matplotlib.pyplot as plt
-import theano.tensor as T
 import skimage.data
 import skimage.color
 import skimage.filters
+from conftest import plt_save_and_maybe_show
 
 
 @pytest.fixture
@@ -41,30 +38,25 @@ def astronaut():
     return cast_to_floatx(astronaut[::4, ::4])
 
 
-def plt_save_and_maybe_show(fname):
-    plt.savefig(os.path.join(TEST_OUTPUT_DIR, fname))
-    if visual_debug:
-        plt.show()
-
 
 def test_add_border_reflect():
-    filter_size = 7
-    half = (filter_size - 1) // 2
+    filter_radius = 3
+    r = filter_radius
     x = theano.shared(np.random.sample((3, 1, 64, 64)))
-    x_with_border = add_border_reflect(x, filter_size).eval()
+    x_with_border = add_border_reflect(x, filter_radius).eval()
     v = x.get_value()
-    top = v[:, :, 1:half+1, :]
-    np.testing.assert_allclose(
-        x_with_border[:, :, half:half+64, half:half+64], v)
-    np.testing.assert_allclose(x_with_border[:, :, :half, half:half+64],
-                               top[:, :, ::-1, :])
-    if visual_debug:
-        plt.subplot(121)
-        plt.imshow(x.get_value()[2, 0, :])
-        plt.subplot(122)
-        plt.imshow(x_with_border[2, 0, :])
-        plt.show()
+    top = v[:, :, 1:r+1, :]
 
+    plt.subplot(121)
+    plt.imshow(x.get_value()[2, 0, :])
+    plt.subplot(122)
+    plt.imshow(x_with_border[2, 0, :])
+    plt_save_and_maybe_show("add_border_reflect.png")
+
+    np.testing.assert_allclose(
+        x_with_border[:, :, r:r+64, r:r+64], v)
+    np.testing.assert_allclose(x_with_border[:, :, :r, r:r+64],
+                               top[:, :, ::-1, :])
 
 def test_benchmark_add_border():
     filter_size = 7
@@ -117,10 +109,14 @@ def test_gaussian_filter_2d(astronaut):
     astronaut_stacked = np.stack([astronaut, astronaut.T])
     img = theano.shared(astronaut_stacked[np.newaxis])
     sigma = 3
-    blur = gaussian_filter_2d(img, sigma, nb_channels=2)
-    blur = blur.eval().reshape(2, 64, 64)
-    expected = skimage.filters.gaussian_filter(astronaut, sigma)
-    expected_transposed = skimage.filters.gaussian_filter(astronaut.T, sigma)
+    theano_blur = gaussian_filter_2d(img, sigma)
+    blur = theano_blur.eval()
+    assert blur.shape == (1, 2, 64, 64)
+    blur = blur[0]
+    expected = skimage.filters.gaussian_filter(astronaut, sigma,
+                                               mode='mirror')
+    expected_transposed = skimage.filters.gaussian_filter(astronaut.T, sigma,
+                                                          mode='mirror')
     np.testing.assert_allclose(blur[0], expected, rtol=0.01, atol=0.02)
     np.testing.assert_allclose(blur[1], expected_transposed,
                                rtol=0.01, atol=0.02)
@@ -140,25 +136,29 @@ def test_gaussian_filter_2d(astronaut):
 def test_gaussian_filter_2d_variable_sigma(astronaut):
     astronaut = astronaut[::2, ::2]
     astronaut_stacked = np.stack([astronaut, astronaut.T])
+    astronaut_stacked = np.stack([astronaut,
+                                  astronaut[:, ::-1],
+                                  astronaut[::-1, :],
+                                  astronaut[::-1, ::-1]])
+    bs = len(astronaut_stacked)
     img = theano.shared(astronaut_stacked[:, np.newaxis])
-    sigmas = np.array([3, 1], dtype=np.float32)
-    blur = gaussian_filter_2d_variable_sigma(img, theano.shared(sigmas))
-    blur = blur.eval().reshape(2, 64, 64)
-    expected = skimage.filters.gaussian_filter(astronaut, float(sigmas[0]))
-    expected_transposed = skimage.filters.gaussian_filter(astronaut.T,
-                                                          float(sigmas[1]))
-    np.testing.assert_allclose(blur[0], expected, rtol=0.01, atol=0.02)
-    np.testing.assert_allclose(blur[1], expected_transposed,
-                               rtol=0.01, atol=0.02)
-    plt.subplot(221)
-    plt.imshow(blur[0], cmap='gray')
-    plt.subplot(222)
-    plt.imshow(expected, cmap='gray')
+    sigmas = np.array([3, 1, 2, 0.5], dtype=np.float32)
+    sigmas_shared = theano.shared(sigmas)
+    theano_blur = gaussian_filter_2d_variable_sigma(img, sigmas_shared)
+    blur = theano_blur.eval()
+    assert blur.shape == (bs, 1, 64, 64)
+    blur = blur.reshape(bs, 64, 64)
+    r, c = 4, 2
+    for i, (sigma, astro) in enumerate(zip(sigmas, astronaut_stacked)):
+        expected = skimage.filters.gaussian_filter(astro,
+                                                   float(sigma), mode='mirror')
 
-    plt.subplot(223)
-    plt.imshow(blur[1], cmap='gray')
-    plt.subplot(224)
-    plt.imshow(expected_transposed, cmap='gray')
+        np.testing.assert_allclose(blur[i], expected, rtol=0.01, atol=0.02)
+
+        plt.subplot(r, c, 2*i+1)
+        plt.imshow(blur[0], cmap='gray')
+        plt.subplot(r, c, 2*(i+1))
+        plt.imshow(expected, cmap='gray')
 
     plt_save_and_maybe_show("test_gaussian_blur_2d_variable_sigmas.png")
 

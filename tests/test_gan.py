@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-from tests import visual_debug, TEST_OUTPUT_DIR
+from conftest import visual_debug, TEST_OUTPUT_DIR
 import os
 import keras
 import theano
@@ -104,7 +104,8 @@ def test_gan_learn_simple_distribution():
     for r in (GAN.Regularizer(), GAN.Regularizer()):
         gan = simple_gan()
         gan.add_gan_regularizer(r)
-        gan.compile('adam', 'adam', gan_binary_crossentropy)
+        gan.build('adam', 'adam', gan_binary_crossentropy)
+        gan.compile()
         callbacks = [LossPrinter()]
         if visual_debug:
             callbacks.append(Plotter(X, TEST_OUTPUT_DIR + "/epoches_plot"))
@@ -115,12 +116,14 @@ def test_gan_learn_simple_distribution():
 
 @pytest.mark.skipif(reason="No multiple comiples #1")
 def test_gan_multiple_compiles(simple_gan):
-    simple_gan.compile('adam', 'adam')
-    simple_gan.compile('adam', 'adam')
+    simple_gan.build('adam', 'adam', gan_binary_crossentropy)
+    simple_gan.compile()
+    simple_gan.compile()
 
 
 def test_gan_utility_funcs(simple_gan: GAN):
-    simple_gan.compile('adam', 'adam', gan_binary_crossentropy)
+    simple_gan.build('adam', 'adam', gan_binary_crossentropy)
+    simple_gan.compile()
     xy_shp = simple_gan_z_shape[1:]
     x = np.zeros(xy_shp, dtype=np.float32)
     y = np.zeros(xy_shp, dtype=np.float32)
@@ -148,7 +151,8 @@ def test_gan_graph():
                "dis", input="dis_flatten")
     add_gan_outputs(g, input='dis')
     gan = GAN(g)
-    gan.compile('adam', 'adam', gan_binary_crossentropy)
+    gan.build('adam', 'adam', gan_binary_crossentropy)
+    gan.compile()
     z_shape = (64, 1, 8, 8)
     gan.generate({'gen_cond': np.zeros(z_shape)}, z_shape)
 
@@ -172,3 +176,17 @@ def test_gan_l2_regularizer():
     fn()
     fn()
     assert reg.l2_coef.get_value() == 0.
+
+
+def test_gan_stop_regularizer():
+    reg = GAN.StopRegularizer()
+
+    g_loss = theano.shared(np.cast['float32'](reg.high.get_value() + 2))
+    d_loss = theano.shared(np.cast['float32'](1.))
+    _, d_reg = reg(g_loss, d_loss)
+    assert d_reg.eval() == 0
+
+    g_loss = theano.shared(np.cast['float32'](reg.high.get_value() - 0.2))
+    d_loss = theano.shared(np.cast['float32'](1.))
+    _, d_reg = reg(g_loss, d_loss)
+    assert d_reg.eval() == d_loss.eval()
