@@ -193,6 +193,7 @@ class GAN(AbstractModel):
 
     def __init__(self, graph: Graph):
         self.graph = graph
+        self._is_built = False
 
         assert self.z_name in self.graph.inputs
         assert self.real_name in self.graph.inputs
@@ -249,9 +250,37 @@ class GAN(AbstractModel):
 
         return OrderedDict(sorted(process_graph(self.graph)))
 
+    def _get_output(self, layer, train=False):
+        if self.graph.layer_cache is not None and self.graph.cache_enabled:
+            layer_id = '%s_%s' % (id(layer), train)
+            if layer_id in self.graph.layer_cache:
+                return self.graph.layer_cache[layer_id]
+        return layer.get_output(train=train)
+
     def debug_dict(self, train=False):
-        return OrderedDict([(name, node.get_output(train))
-                            for name, node in self.layer_dict().items()])
+        self._ensure_build()
+
+        layers = self.layer_dict().items()
+        outs = OrderedDict([(name, self._get_output(node, train))
+                            for name, node in layers])
+        gen_layers = OrderedDict(
+            [(name, outs[name]) for name, node in layers
+             if name.startswith('gen')])
+        dis_layers = OrderedDict(
+            [(name, outs[name]) for name, node in layers
+             if name.startswith('dis')])
+
+        outs.update([('{}_grad'.format(name), g) for name, g in
+                     zip(gen_layers.keys(),
+                         T.grad(self.g_loss, list(gen_layers.values()),
+                                disconnected_inputs='warn'))])
+
+        outs.update([('{}_grad'.format(name), g) for name, g in
+                     zip(dis_layers.keys(),
+                         T.grad(self.d_loss, list(dis_layers.values()),
+                                disconnected_inputs='warn')
+                         )])
+        return outs
 
     def _set_loss_metrics(self, g_loss, d_loss, d_loss_gen, d_loss_real):
         self.metrics['g_loss'] = g_loss
@@ -261,28 +290,27 @@ class GAN(AbstractModel):
 
     def build(self, g_optimizer: Optimizer, d_optimizer: Optimizer,
               loss):
+        assert not self._is_built
+
         def get_updates(optimizer, nodes, loss):
             optimizer = keras.optimizers.get(optimizer)
 
-            weights, regularizers, constraints, layer_updates = zip(
-                *[n.get_params() for n in nodes])
-
+            params = zip(*[n.get_params() for n in nodes])
+            # flatten the params for all the layers
+            params = map(flatten, params)
+            weights, regularizers, constraints, layer_updates = params
             for r in regularizers:
                 loss = r(loss)
 
-            updates = optimizer.get_updates(
-                flatten(weights),
-                flatten(constraints), loss)
-            return updates + flatten(layer_updates)
+            updates = optimizer.get_updates(weights, constraints, loss)
+            return updates + layer_updates
 
-        d_out_given_fake_gen = \
-            self.graph.outputs[self.dis_out_given_fake_for_gen] \
-            .get_output(train=True)
-        d_out_given_fake_dis = \
-            self.graph.outputs[self.dis_out_given_fake_for_dis] \
-            .get_output(train=True)
-        d_out_given_real = \
-            self.graph.nodes[self.dis_out_given_real].get_output(train=True)
+        d_out_given_fake_gen = self._get_output(
+            self.graph.outputs[self.dis_out_given_fake_for_gen], train=True)
+        d_out_given_fake_dis = self._get_output(
+            self.graph.outputs[self.dis_out_given_fake_for_dis], train=True)
+        d_out_given_real = self._get_output(
+            self.graph.nodes[self.dis_out_given_real], train=True)
 
         losses = loss(
             d_out_given_fake_gen, d_out_given_fake_dis, d_out_given_real)
@@ -299,23 +327,29 @@ class GAN(AbstractModel):
 
         ins = [self.graph.inputs[name].input
                for name in self.graph.input_order]
-        return {
-            'g_updates': g_updates,
-            'd_updates': d_updates,
-            'ins': ins,
-            'g_loss': g_loss,
-            'd_loss': d_loss
-        }
+        self.g_updates = g_updates
+        self.d_updates = d_updates
+        self.inputs = ins
+        self.g_loss = g_loss
+        self.d_loss = d_loss
+        self._is_built = True
 
-    def compile(self, g_optimizer: Optimizer, d_optimizer: Optimizer, loss):
-        v = self.build(g_optimizer, d_optimizer, loss)
-        updates = v['g_updates'] + v['d_updates'] + self.updates
-        self._train = K.function(v['ins'],
+    def _ensure_build(self):
+        if not self._is_built:
+            self.build()
+
+    def compile(self):
+        assert self._is_built, \
+            "Did you forget to call `build()`, before `compile`?"
+        updates = self.g_updates + self.d_updates + self.updates
+        self._train = K.function(self.inputs,
                                  list(self.metrics.values()),
                                  updates=updates)
         self.compile_generate()
 
     def compile_generate(self):
+        assert self._is_built, \
+            "Did you forget to call `build()`, before `compile_generate`?"
         gen_ins = [self.graph.inputs[name].input
                    for name in self.graph.input_order
                    if name.startswith("gen") or name == self.z_name]
@@ -323,6 +357,8 @@ class GAN(AbstractModel):
             gen_ins, self.graph.nodes[self.generator_name].get_output(False))
 
     def compile_debug(self, train=False):
+        assert self._is_built, \
+            "Did you forget to call `build()`, before `compile_debug`?"
         ins = [self.graph.inputs[name].input
                for name in self.graph.input_order]
         self._debug = K.function(ins, list(self.debug_dict(train).values()))
@@ -396,7 +432,7 @@ class GAN(AbstractModel):
     def debug(self, inputs={}):
         ins = [inputs[n] for n in self.graph.input_order]
         outs = self._debug(ins)
-        return dict(zip(self.layer_dict().keys(), outs))
+        return dict(zip(self.debug_dict().keys(), outs))
 
     def interpolate(self, x, y):
         z = np.zeros(self.z_shape)
