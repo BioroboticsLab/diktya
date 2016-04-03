@@ -22,11 +22,11 @@ import theano
 
 def test_activity_in_bounds_regularizer():
     layer = Layer()
-    input = theano.shared(np.array([0, 0]))
+    input = theano.shared(np.array([0, 0], dtype='float32'))
     layer.input = input
     reg = ActivityInBoundsRegularizer()
     reg.set_layer(layer)
     assert reg(0).eval() == 0
 
-    input.set_value(np.array([2]))
+    input.set_value(np.array([2], dtype='float32'))
     assert reg(0).eval() > 0
