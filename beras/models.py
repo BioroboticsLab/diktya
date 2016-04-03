@@ -75,12 +75,11 @@ class AbstractModel(object):
             labelled by out_labels.  """
 
         history = cbks.History()
+        callbacks = [cbks.BaseLogger()] + callbacks + [history]
         if verbose:
-            callbacks = [history, cbks.BaseLogger()] + callbacks
-        else:
-            callbacks = [history] + callbacks
-        callbacks = cbks.CallbackList(callbacks)
+            callbacks = callbacks + [cbks.ProgbarLogger()]
 
+        callbacks = cbks.CallbackList(callbacks)
         callbacks._set_model(self)
         callbacks._set_params({
             'batch_size': nb_train_sample // nb_batches,
