@@ -105,12 +105,10 @@ class AutomaticLearningRateScheduler(Callback):
         self.epoch_patience = epoch_patience
         self.epoch_log = []
         self.factor = factor
-        self.init_min_improvement = min_improvment
 
     def on_train_begin(self, logs={}):
         self.current_best = np.infty
         self.current_best_epoch = 0
-        self.min_improvment = self.init_min_improvement
 
     def on_epoch_start(self, epoch, logs={}):
         self.epoch_log = []
