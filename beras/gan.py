@@ -147,13 +147,14 @@ class GAN(AbstractModel):
 
     class StopRegularizer(Callback):
         def __init__(self, high=1.3):
-            self.high = high
+            self.high = K.variable(high)
 
         def set_gan(self, gan):
             self.gan = gan
 
         def __call__(self, g_loss, d_loss):
-            d_loss = ifelse(g_loss > self.high,
+            d_loss = ifelse(T.and_(g_loss > self.high,
+                                   d_loss < 1.5*self.high),
                             0.*d_loss,
                             d_loss)
             return g_loss, d_loss
