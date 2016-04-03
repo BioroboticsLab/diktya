@@ -21,13 +21,13 @@ from dotmap import DotMap
 import keras.initializations
 from keras.layers.convolutional import Convolution2D
 from keras.layers.core import Dense, Flatten
-
-from keras.models import Sequential, Graph
+from keras.engine.topology import Input, merge, Container
+from keras.models import Sequential
 import math
 import pytest
 
 from beras.gan import GAN, sequential_to_gan, gan_binary_crossentropy, \
-    add_gan_outputs
+    gan_outputs
 import numpy as np
 
 
@@ -136,23 +136,27 @@ def test_gan_utility_funcs(simple_gan: GAN):
 
 
 def test_gan_graph():
-    g = Graph()
-    g.add_input(GAN.z_name, (1, 8, 8))
-    g.add_input(GAN.real_name, (1, 8, 8))
-    g.add_input("gen_cond", (1, 8, 8))
-    g.add_node(Convolution2D(10, 2, 2, activation='relu', border_mode='same'),
-               name=GAN.generator_name, inputs=['z', 'gen_cond'], concat_axis=1)
-    g.add_node(Convolution2D(5, 2, 2, activation='relu'),
-               "dis_conv", inputs=[GAN.generator_name, GAN.real_name],
-               concat_axis=1)
-    g.add_node(Flatten(), "dis_flatten", input="dis_conv")
-    g.add_node(Dense(1, input_dim=20, activation='sigmoid'),
-               "dis", input="dis_flatten")
-    add_gan_outputs(g, input='dis')
-    gan = GAN(g)
+    z = Input(shape=(1, 8, 8), name='z')
+    real = Input(shape=(1, 8, 8), name='real')
+    fake = Input(shape=(1, 8, 8), name='fake')
+
+    gen_cond = Input(shape=(1, 8, 8), name='gen_cond')
+    gen_input = merge([z, gen_cond], mode='concat', concat_axis=1)
+    gen = Convolution2D(10, 2, 2, activation='relu',
+                        border_mode='same')(gen_input)
+    generator = Container([z, gen_cond], [gen])
+
+    dis_input = merge([fake, real], concat_axis=1)
+    dis_conv = Convolution2D(5, 2, 2, activation='relu')(dis_input)
+    dis_flatten = Flatten()(dis_conv)
+    dis = Dense(1, activation='sigmoid')(dis_flatten)
+    outputs = gan_outputs(dis)
+    discriminator = Container([fake, real], outputs)
+    gan = GAN(generator, discriminator)
     gan.build('adam', 'adam', gan_binary_crossentropy)
     gan.compile()
     z_shape = (64, 1, 8, 8)
+    print(generator.inputs)
     gan.generate({'gen_cond': np.zeros(z_shape)}, z_shape)
 
 

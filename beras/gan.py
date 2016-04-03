@@ -25,6 +25,7 @@ from keras.models import Graph, Sequential
 import keras.optimizers
 from keras.optimizers import Optimizer
 from keras.callbacks import Callback
+from keras.engine.topology import Container, Input, merge
 from beras.models import AbstractModel
 
 
@@ -91,52 +92,34 @@ def gan_linear_losses(d_out_given_fake_for_gen,
 
 
 def sequential_to_gan(generator: Sequential, discriminator: Sequential,
-                      nb_real=32, nb_fake=96,
-                      nb_fake_for_gen=64,
-                      nb_fake_for_dis=32):
-    z_shape = (nb_fake,) + generator.layers[0].input_shape[1:]
-    g = Graph()
-    g.add_input(GAN.z_name, batch_input_shape=z_shape)
-    g.add_node(generator, GAN.generator_name, input=GAN.z_name)
-
-    real_shape = (nb_real,) + g.nodes[GAN.generator_name].output_shape[1:]
-    g.add_input(GAN.real_name, batch_input_shape=real_shape)
-    g.add_node(discriminator, "discriminator",
-               inputs=[GAN.generator_name, "real"], concat_axis=0)
-    g.add_node(Split(0, nb_fake_for_gen), GAN.dis_out_given_fake_for_gen,
-               input="discriminator", create_output=True)
-    g.add_node(Split(nb_fake - nb_fake_for_dis, nb_fake),
-               GAN.dis_out_given_fake_for_dis,
-               input="discriminator", create_output=True)
-    g.add_node(Split(nb_fake, nb_fake+nb_real), GAN.dis_out_given_real,
-               input="discriminator", create_output=True)
-
-    gan = GAN(g)
-    return gan
+                      nb_real=32, nb_fake=96):
+    generator.inputs[0].name = 'z'
+    fake = Input(shape=discriminator.input_shape[1:], name='fake')
+    real = Input(shape=discriminator.input_shape[1:], name='real')
+    dis_in = merge([fake, real], concat_axis=0, mode='concat')
+    dis = discriminator(dis_in)
+    dis_outputs = gan_outputs(dis, fake_for_gen=(0, nb_fake),
+                              fake_for_dis=(nb_fake - nb_real, nb_real),
+                              real=(nb_fake, nb_fake + nb_real))
+    return GAN(generator, Container([fake, real], dis_outputs))
 
 
-def add_gan_outputs(graph: Graph, input="discriminator", fake_for_gen=(0, 64),
-                    fake_for_dis=(0, 64),
-                    real=(64, 128)):
-    graph.add_node(Split(*fake_for_gen),
-                   GAN.dis_out_given_fake_for_gen,
-                   input=input, create_output=True)
-    graph.add_node(Split(*fake_for_dis),
-                   GAN.dis_out_given_fake_for_dis,
-                   input=input, create_output=True)
-    graph.add_node(Split(*real), GAN.dis_out_given_real,
-                   input=input, create_output=True)
+def gan_outputs(discriminator,
+                fake_for_gen=(0, 64),
+                fake_for_dis=(0, 64),
+                real=(64, 128)):
+    return Split(*fake_for_gen)(discriminator), \
+        Split(*fake_for_dis)(discriminator), \
+        Split(*real)(discriminator)
 
 
 class GAN(AbstractModel):
-    z_name = "z"
-    g_out_name = "g_out"
-    d_input = 'd_input'
-    real_name = "real"
-    generator_name = "generator"
-    dis_out_given_fake_for_gen = "discriminator_given_fake_for_generator"
-    dis_out_given_fake_for_dis = "discriminator_given_fake_for_discriminator"
-    dis_out_given_real = "discriminator_given_real"
+    dis_out_given_fake_for_gen_idx = 0
+    dis_out_given_fake_for_dis_idx = 1
+    dis_out_given_real_idx = 2
+    real_idx = 1
+    fake_idx = 0
+    z_idx = 0
 
     class Regularizer(Callback):
         def __call__(self, g_loss, d_loss):
@@ -191,71 +174,36 @@ class GAN(AbstractModel):
             d_loss = self._apply_l2_regulizer(params, d_loss)
             return g_loss, d_loss
 
-    def __init__(self, graph: Graph):
-        self.graph = graph
-        self._is_built = False
+    def __init__(self, generator: Container, discriminator: Container):
+        assert len(generator.inputs) >= 1
+        assert len(discriminator.inputs) >= 2
 
-        assert self.z_name in self.graph.inputs
-        assert self.real_name in self.graph.inputs
-        assert self.generator_name in self.graph.nodes
-        assert self.dis_out_given_fake_for_gen in self.graph.outputs
-        assert self.dis_out_given_fake_for_dis in self.graph.outputs
-        assert self.dis_out_given_real in self.graph.outputs
+        self.generator = generator
+        self.discriminator = discriminator
 
+        self.z = generator.inputs[self.z_idx]
+
+        assert self.z.name == 'z'
+        assert discriminator.inputs[self.fake_idx].name == 'fake'
+        self.real = discriminator.inputs[self.real_idx]
+        assert self.real.name == 'real'
+
+        self.inputs = generator.inputs + discriminator.inputs[1:]
+        self.input_order = [i.name for i in self.inputs]
         self._gan_regularizers = []
         self.updates = []
         self.metrics = OrderedDict()
-
-        self.logger = logging.getLogger("gan.GAN")
-        self.logger.info("Create new GAN")
-        self.logger.info("Generator nodes: {}".format(
-           ", ".join(iter(self.get_generator_nodes().keys()))))
-        self.logger.info("Discriminator nodes: {}".format(
-           ", ".join(iter(self.get_discriminator_nodes().keys()))))
-
-    def get_generator_nodes(self):
-        return OrderedDict([(name, node)
-                            for name, node in self.graph.nodes.items()
-                            if name.startswith("gen")])
-
-    def get_discriminator_nodes(self):
-        return OrderedDict([(name, node)
-                            for name, node in self.graph.nodes.items()
-                            if name.startswith("dis")])
+        self._is_built = False
 
     @property
     def z_shape(self):
-        return self.graph.inputs[GAN.z_name].input_shape
+        return self.z_layer.input_shape
 
-    def layer_dict(self):
-        def process_node(name, node):
-            if issubclass(type(node), Graph):
-                for n, node in process_graph(node):
-                    yield name + "/" + n + "-" + node.name, node
-            elif issubclass(type(node), Sequential):
-                for n, item in process_list(node):
-                    yield name + "#" + n + "-" + item.name,  item
-            else:
-                yield name, node
-
-        def process_graph(g):
-            for name, node in g.nodes.items():
-                for n, out in process_node(name, node):
-                    yield n, out
-
-        def process_list(l):
-            for i, node in enumerate(l.layers):
-                for n, out in process_node("{:02d}".format(i), node):
-                    yield n, out
-
-        return OrderedDict(sorted(process_graph(self.graph)))
-
-    def _get_output(self, layer, train=False):
-        if self.graph.layer_cache is not None and self.graph.cache_enabled:
-            layer_id = '%s_%s' % (id(layer), train)
-            if layer_id in self.graph.layer_cache:
-                return self.graph.layer_cache[layer_id]
-        return layer.get_output(train=train)
+    @property
+    def z_layer(self):
+        if not hasattr(self.generator, 'input_layers'):
+            self.generator.build()
+        return self.generator.input_layers[self.z_idx]
 
     def debug_dict(self, train=False):
         self._ensure_build()
@@ -292,44 +240,33 @@ class GAN(AbstractModel):
               loss):
         assert not self._is_built
 
-        def get_updates(optimizer, nodes, loss):
+        def get_updates(optimizer, container, loss):
             optimizer = keras.optimizers.get(optimizer)
+            for r in container.regularizers:
+                loss += r(loss)
+            updates = optimizer.get_updates(container.trainable_weights,
+                                            container.constraints, loss)
+            return updates + container.updates
 
-            params = zip(*[n.get_params() for n in nodes])
-            # flatten the params for all the layers
-            params = map(flatten, params)
-            weights, regularizers, constraints, layer_updates = params
-            for r in regularizers:
-                loss = r(loss)
-
-            updates = optimizer.get_updates(weights, constraints, loss)
-            return updates + layer_updates
-
-        d_out_given_fake_gen = self._get_output(
-            self.graph.outputs[self.dis_out_given_fake_for_gen], train=True)
-        d_out_given_fake_dis = self._get_output(
-            self.graph.outputs[self.dis_out_given_fake_for_dis], train=True)
-        d_out_given_real = self._get_output(
-            self.graph.nodes[self.dis_out_given_real], train=True)
+        d_outs = self.discriminator([self.generator.output, self.real])
+        d_out_given_fake_gen = d_outs[self.dis_out_given_fake_for_gen_idx]
+        d_out_given_fake_dis = d_outs[self.dis_out_given_fake_for_dis_idx]
+        d_out_given_real = d_outs[self.dis_out_given_real_idx]
 
         losses = loss(
             d_out_given_fake_gen, d_out_given_fake_dis, d_out_given_real)
+
         g_loss, d_loss = losses[:2]
         for r in self._gan_regularizers:
             g_loss, d_loss = r(g_loss, d_loss)
 
         self._set_loss_metrics(g_loss, d_loss, *losses[2:])
 
-        g_updates = get_updates(
-            g_optimizer, self.get_generator_nodes().values(), g_loss)
-        d_updates = get_updates(
-            d_optimizer, self.get_discriminator_nodes().values(), d_loss)
+        g_updates = get_updates(g_optimizer, self.generator, g_loss)
+        d_updates = get_updates(d_optimizer, self.discriminator, d_loss)
 
-        ins = [self.graph.inputs[name].input
-               for name in self.graph.input_order]
         self.g_updates = g_updates
         self.d_updates = d_updates
-        self.inputs = ins
         self.g_loss = g_loss
         self.d_loss = d_loss
         self._is_built = True
@@ -350,18 +287,15 @@ class GAN(AbstractModel):
     def compile_generate(self):
         assert self._is_built, \
             "Did you forget to call `build()`, before `compile_generate`?"
-        gen_ins = [self.graph.inputs[name].input
-                   for name in self.graph.input_order
-                   if name.startswith("gen") or name == self.z_name]
         self._generate = K.function(
-            gen_ins, self.graph.nodes[self.generator_name].get_output(False))
+            self.generator.inputs,
+            self.generator.outputs)
 
     def compile_debug(self, train=False):
         assert self._is_built, \
             "Did you forget to call `build()`, before `compile_debug`?"
-        ins = [self.graph.inputs[name].input
-               for name in self.graph.input_order]
-        self._debug = K.function(ins, list(self.debug_dict(train).values()))
+        self._debug = K.function(
+            self.inputs, list(self.debug_dict(train).values()))
 
     def add_gan_regularizer(self, r):
         r.set_gan(self)
@@ -383,7 +317,7 @@ class GAN(AbstractModel):
                 batch_logs = {}
 
             ins = []
-            for name in self.graph.input_order:
+            for name in self.input_order:
                 b = batch_size[name]
                 e = b + batch_size[name]
                 ins.append(data[name][b:e])
@@ -403,7 +337,7 @@ class GAN(AbstractModel):
 
         def train(model, batch_index, batch_logs=None):
             ins = next(generator)
-            inputs = [ins[name] for name in self.graph.input_order]
+            inputs = [ins[name] for name in self.input_order]
             outs = self._train(inputs)
             for key, value in zip(self.metrics.keys(), outs):
                 batch_logs[key] = value
@@ -418,28 +352,29 @@ class GAN(AbstractModel):
     def generate(self, inputs=None, z_shape=None, nb_samples=None):
         if inputs is None:
             inputs = {}
-        if GAN.z_name not in inputs:
+        if 'z' not in inputs:
             if z_shape is None:
                 z_shape = self.z_shape
                 if nb_samples:
                     z_shape = (nb_samples, ) + z_shape[1:]
             assert None not in z_shape
-            inputs[GAN.z_name] = np.random.uniform(-1, 1, z_shape)
-        ins = [inputs[n] for n in self.graph.input_order
+            inputs['z'] = np.random.uniform(-1, 1, z_shape)
+        ins = [inputs[n] for n in self.input_order
                if n in inputs]
+        assert len(ins) == len(self.generator.inputs)
         return self._generate(ins)
 
     def debug(self, inputs={}):
-        ins = [inputs[n] for n in self.graph.input_order]
+        ins = [inputs[n] for n in self.input_order]
         outs = self._debug(ins)
         return dict(zip(self.debug_dict().keys(), outs))
 
-    def interpolate(self, x, y):
-        z = np.zeros(self.z_shape)
-        n = len(z)
-        for i in range(n):
-            z[i] = x + i / n * (y - x)
-        return self.generate({GAN.z_name: z})
+    def interpolate(self, x, y, nb_steps=100):
+        assert x.shape == y.shape == self.z_shape[1:]
+        z = np.zeros((nb_steps,) + x.shape)
+        for i in range(nb_steps):
+            z[i] = x + i / nb_steps * (y - x)
+        return self.generate({'z': z})
 
     def random_z_point(self):
         """returns a random point in the z space"""
@@ -458,4 +393,4 @@ class GAN(AbstractModel):
             offset = np.random.normal(0, std, shp)
             z[i] = np.clip(z_point + offset, -1, 1)
 
-        return self.generate({GAN.z_name: z})
+        return self.generate({'z': z})

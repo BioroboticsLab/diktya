@@ -14,42 +14,12 @@
 
 from __future__ import absolute_import
 from __future__ import print_function
-from keras.models import batch_shuffle, slice_X, get_function_name, Sequential, \
-    Graph
-from keras.models import make_batches
+from keras.engine.training import make_batches, slice_X
 import numpy as np
 import pprint
 
 from keras import callbacks as cbks
 from keras.utils.generic_utils import Progbar
-
-
-def asgraph(model, input_name=None, inputs=None, output_name="output",
-            merge_mode='concat', concat_axis=-1) -> Graph:
-    """
-    From Sequential models make Graphs. Use full to write code that works with
-    both Graph and Seuential models.
-    :param model: Sequential of Graph model
-    :param input_name: The name of the input
-    :param output_name: The name of the output
-    :return: Graph
-    """
-    assert type(model) == Sequential or issubclass(type(model), Sequential)
-    if input_name is None:
-        input_name = "input"
-    if inputs is None:
-        inputs = {input_name: model.layers[0].input_shape[1:]}
-    g = Graph()
-    for name, shape in inputs.items():
-        g.add_input(name, shape)
-    inputs = list(inputs.keys())
-    if len(inputs) >= 2:
-        g.add_node(model, name="model", inputs=inputs,
-                   merge_mode='concat', concat_axis=concat_axis)
-    else:
-        g.add_node(model, name="model", input=inputs[0])
-    g.add_output(output_name, input="model")
-    return g
 
 
 class AbstractModel(object):
@@ -179,9 +149,10 @@ class AbstractModel(object):
             config['optimizer'] = self.optimizer.get_config()
         if hasattr(self, 'loss'):
             if type(self.loss) == dict:
-                config['loss'] = dict([(k, get_function_name(v)) for k, v in self.loss.items()])
+                config['loss'] = dict([(k, v.__name__)
+                                       for k, v in self.loss.items()])
             else:
-                config['loss'] = get_function_name(self.loss)
+                config['loss'] = self.loss.__name__
 
         if verbose:
             pp = pprint.PrettyPrinter(indent=4)
