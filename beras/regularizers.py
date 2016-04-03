@@ -21,12 +21,13 @@ class ActivityInBoundsRegularizer(Regularizer):
     def __init__(self, low=-1, high=1):
         self.low = low
         self.high = high
+        self.uses_learning_phase = True
 
     def __call__(self, loss):
         activation = self.layer.input
         l = K.switch(activation < self.low, K.abs(activation - self.low), 0)
         h = K.switch(activation > self.high, K.abs(activation - self.high), 0)
-        return loss + K.sum(h + l)
+        return K.in_train_phase(loss + K.sum(h + l), loss)
 
     def get_config(self):
         return {
@@ -39,13 +40,14 @@ class ActivityInBoundsRegularizer(Regularizer):
 class SumBelow(Regularizer):
     def __init__(self, max_sum):
         self.max_sum = K.variable(max_sum)
+        self.uses_learning_phase = True
 
     def __call__(self, loss):
         activation = self.layer.get_output(True)
         axes = (i for i in range(1, len(self.layer.output_shape)))
         sum = K.sum(activation, axis=axes)
         too_big = K.switch(sum > self.max_sum, K.abs(self.max_sum - sum), 0)
-        return loss + K.sum(too_big)
+        return K.in_train_phase(loss + K.sum(too_big), loss)
 
     def get_config(self):
         return {
