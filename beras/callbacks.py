@@ -45,18 +45,21 @@ class VisualiseGAN(Callback):
         z_shape = (self.nb_samples, ) + z_shape[1:]
         self.z = np.random.uniform(-1, 1, z_shape)
 
+    def __call__(self):
+        fake = self.model.generate({'z': self.z})
+        fake = self.preprocess(fake)
+        tiled_fakes = tile(fake)
+        plt.imshow(tiled_fakes[0], cmap='gray')
+        plt.grid(False)
+        if self.show:
+            plt.show()
+
     def on_epoch_end(self, epoch, logs={}):
         epoch = epoch + 1
         if self.should_visualise(epoch):
-            fake = self.model.generate({'z': self.z})
-            fake = self.preprocess(fake)
-            tiled_fakes = tile(fake)
-            plt.imshow(tiled_fakes[0], cmap='gray')
-            plt.grid(False)
+            self()
             fname = os.path.join(self.output_dir, "{:05d}.png".format(epoch))
             plt.savefig(fname, dpi=200)
-            if self.show:
-                plt.show()
             plt.clf()
 
 
