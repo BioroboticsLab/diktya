@@ -26,7 +26,6 @@ from keras.layers.core import Layer
 from keras.backend.common import cast_to_floatx, floatx
 from scipy.misc import imsave
 import skimage.filters
-from theano.gradient import disconnected_grad
 
 
 def static_vars(**kwargs):
@@ -90,12 +89,12 @@ _gaussian_blur_kernel = np.asarray([[[
 ]]], dtype=floatx())
 
 
-def upsample(input, sigma=2/3, nb_channels=1):
+def upsample(input, sigma=2/3):
     if type(input) == list:
         assert len(input) == 1
         input = input[0]
     resized = resize_interpolate(input, scale=0.5)
-    return smooth(resized, sigma, nb_channels=nb_channels)
+    return smooth(resized, sigma)
 
 
 def np_gaussian_kernel(sigma, size=None, nb_channels=1):
@@ -117,19 +116,7 @@ def resize_nearest_neighbour(images, scale):
     return images[:, :, ::scale, ::scale]
 
 
-@static_vars(op=None)
 def resize_interpolate(input, scale):
-    if resize_interpolate.op is None:
-        g_input = T.tensor4()
-        g_scale = T.scalar()
-        resize_interpolate.op = theano.OpFromGraph(
-            [g_input, g_scale],
-            [resize_interpolate_graph(g_input, g_scale)])
-    scale = T.cast(T.as_tensor_variable(scale), 'float32')
-    return resize_interpolate.op(input, scale)
-
-
-def resize_interpolate_graph(input, scale):
     # from https://github.com/Lasagne/Lasagne/blob/master/lasagne/layers/special.py
     num_batch, num_channels, height, width = input.shape
 
@@ -271,7 +258,6 @@ def gaussian_kernel_1d(sigma, window_radius=None):
     index = T.arange(2*radius + 1) - radius
     index = T.cast(index, 'float32')
     index = T.tile(index, nb_sigmas).reshape((nb_sigmas, 2*radius+1))
-    index = disconnected_grad(index)
     kernel = T.exp(-0.5*index**2/sigma**2)
     kernel = kernel / kernel.sum(axis=1).dimshuffle(0, 'x')
     kernel = T.cast(kernel, 'float32')
@@ -337,51 +323,26 @@ def gaussian_filter_1d(input, sigma, window_radius=40, axis=-1,
     return blur
 
 
-def gaussian_filter_2d_graph(input, sigma, window_radius=None,
-                             border_mode='reflect', nb_channels=1):
-    def filter_one_channel(channel_idx):
-        dimpattern_w = ('x', 'x', 0, 1)
-        dimpattern_h = ('x', 'x', 1, 0)
-        filter_w = filter_1d.dimshuffle(dimpattern_w)
-        blur_w = T.nnet.conv2d(padded_input[:, channel_idx:channel_idx + 1],
-                               filter_w, border_mode='valid',
-                               filter_shape=[1, 1, 1, None])
-        filter_h = filter_1d.dimshuffle(dimpattern_h)
-        return T.nnet.conv2d(blur_w, filter_h, border_mode='valid',
-                             filter_shape=[1, 1, None, 1])
+def gaussian_filter_2d(input, sigma, window_radius=None,
+                             border_mode='reflect'):
+    bs, ch, h, w = input.shape
     ndim = 4
     assert input.ndim == ndim, \
         "there must be {} dimensions, got {}".format(ndim, input.ndim)
     window_radius = gaussian_kernel_default_radius(sigma, window_radius)
+    input = input.reshape((bs*ch, 1, h, w))
     padded_input = add_border(input, window_radius, border_mode)
     filter_1d = gaussian_kernel_1d(sigma, window_radius)
-    blur, _ = theano.scan(filter_one_channel,
-                          sequences=T.arange(nb_channels),
-                          n_steps=nb_channels)
-    return blur[:, :, 0].dimshuffle(1, 0, 2, 3)
-
-
-@static_vars(op=None)
-def gaussian_filter_2d(input, sigma, window_radius=None, nb_channels=1):
-    if gaussian_filter_2d.op is None:
-        g_input = T.tensor4()
-        g_simga = T.scalar()
-        g_radius = T.iscalar()
-        g_nb_channels = T.iscalar()
-        gaussian_filter_2d.op = theano.OpFromGraph(
-            [g_input, g_simga, g_radius, g_nb_channels],
-            [gaussian_filter_2d_graph(g_input, g_simga, g_radius,
-                                      nb_channels=g_nb_channels)],
-            connection_pattern=[[True], [True], [False], [False]]
-        )
-
-    window_radius = gaussian_kernel_default_radius(sigma, window_radius)
-    sigma = T.cast(T.as_tensor_variable(sigma), 'float32')
-    window_radius = T.cast(theano.gradient.disconnected_grad(
-        T.as_tensor_variable(window_radius)), 'int32')
-    nb_channels = T.cast(theano.gradient.disconnected_grad(
-        T.as_tensor_variable(nb_channels)), 'int32')
-    return gaussian_filter_2d.op(input, sigma, window_radius, nb_channels)
+    dimpattern_w = ('x', 'x', 0, 1)
+    dimpattern_h = ('x', 'x', 1, 0)
+    filter_w = filter_1d.dimshuffle(dimpattern_w)
+    blur_w = T.nnet.conv2d(padded_input,
+                           filter_w, border_mode='valid',
+                           filter_shape=[1, 1, 1, None])
+    filter_h = filter_1d.dimshuffle(dimpattern_h)
+    blured = T.nnet.conv2d(blur_w, filter_h, border_mode='valid',
+                           filter_shape=[1, 1, None, 1])
+    return blured.reshape((bs, ch, h, w))
 
 
 def gaussian_filter_2d_variable_sigma(input, sigmas, window_radius=None):
@@ -408,12 +369,11 @@ def gaussian_filter_2d_variable_sigma(input, sigmas, window_radius=None):
     return blur.reshape(input.shape)
 
 
-def smooth(input, sigma=2/4, nb_channels=1, window_radius=None):
+def smooth(input, sigma=2/4, window_radius=None):
     if type(input) == list:
         assert len(input) == 1
         input = input[0]
-    return gaussian_filter_2d(input, sigma, nb_channels=nb_channels,
-                              window_radius=window_radius)
+    return gaussian_filter_2d(input, sigma, window_radius=window_radius)
 
 
 class BorderReflect(Layer):
