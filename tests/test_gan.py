@@ -29,7 +29,6 @@ import pytest
 from beras.gan import GAN, sequential_to_gan, gan_binary_crossentropy, \
     add_gan_outputs
 import numpy as np
-from beras.util import LossPrinter
 
 
 def sample_circle(nb_samples):
@@ -106,7 +105,7 @@ def test_gan_learn_simple_distribution():
         gan.add_gan_regularizer(r)
         gan.build('adam', 'adam', gan_binary_crossentropy)
         gan.compile()
-        callbacks = [LossPrinter()]
+        callbacks = []
         if visual_debug:
             callbacks.append(Plotter(X, TEST_OUTPUT_DIR + "/epoches_plot"))
         z = np.random.uniform(-1, 1, (len(X), simple_gan_nb_z))
