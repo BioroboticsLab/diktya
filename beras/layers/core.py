@@ -25,10 +25,6 @@ class Split(Layer):
         self.stop = stop
         self.step = step
         self.axis = axis
-        self.trainable_weights = []
-        self.regularizers = []
-        self.constraints = []
-        self.updates = []
 
     def get_output_shape_for(self, input_shape):
         shp = input_shape
