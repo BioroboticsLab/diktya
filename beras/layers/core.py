@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras.layers.core import Layer
+from keras.layers.core import Layer, InputSpec
 import keras.backend as K
 import theano.tensor as T
 import theano
@@ -30,9 +30,8 @@ class Split(Layer):
         self.constraints = []
         self.updates = []
 
-    @property
-    def output_shape(self):
-        shp = self.input_shape
+    def get_output_shape_for(self, input_shape):
+        shp = input_shape
         new_shp = []
         length = (self.stop - self.start) // abs(self.step)
         for i in range(len(shp)):
@@ -42,53 +41,50 @@ class Split(Layer):
                 new_shp.append(shp[i])
         return tuple(new_shp)
 
-    def get_output(self, train=False):
-        X = self.get_input(train)
+    def call(self, x, mask=None):
         index = []
-        for i in range(K.ndim(X)):
+        for i in range(K.ndim(x)):
             if i == self.axis:
                 index.append(slice(self.start, self.stop, self.step))
             else:
                 index.append(slice(None, None, 1))
-        return X[tuple(index)]
+        return x[tuple(index)]
 
 
 class Swap(Layer):
     def __init__(self, a, b, **kwargs):
         self.a = a
         self.b = b
-        self.trainable_weights = []
-        self.regularizers = []
-        self.constraints = []
-        self.updates = []
         super(Swap, self).__init__(**kwargs)
 
-    def get_output(self, train=False):
-        X = self.get_input(train)
-        tmp = X[:, self.a]
-        X = T.set_subtensor(X[:, self.a], X[:, self.b])
-        X = T.set_subtensor(X[:, self.b], tmp)
-        return X
+    def call(self, x, mask=None):
+        tmp = x[:, self.a]
+        x = T.set_subtensor(x[:, self.a], x[:, self.b])
+        x = T.set_subtensor(x[:, self.b], tmp)
+        return x
 
 
 class ZeroGradient(Layer):
-    def get_output(self, train=False):
-        return theano.gradient.zero_grad(self.get_input(train))
+    def call(self, x, mask=None):
+        return theano.gradient.zero_grad(x)
 
 
 class LinearInBounds(Layer):
     def __init__(self, low=-1, high=1, clip=False, **kwargs):
-        self.act_reg = ActivityInBoundsRegularizer(low, high)
+        self.activity_in_bounds = ActivityInBoundsRegularizer(low, high)
         self.clip = clip
         super().__init__(**kwargs)
 
-    def build(self):
-        self.act_reg.set_layer(self.previous)
-        self.regularizers = [self.act_reg]
+    def build(self, input_shape):
+        self.input_spec = [InputSpec(dtype=K.floatx(),
+                                     shape=(None,) + input_shape[1:])]
+        self.activity_in_bounds.set_layer(self)
+        self.regularizers = [self.activity_in_bounds]
+        super().build(input_shape)
 
-    def get_output(self, train=False):
-        X = self.get_input(train=train)
+    def call(self, x, mask=None):
         if self.clip:
-            return K.clip(X, self.act_reg.low, self.act_reg.high)
+            return K.clip(x, self.activity_in_bounds.low,
+                          self.activity_in_bounds.high)
         else:
-            return X
+            return x

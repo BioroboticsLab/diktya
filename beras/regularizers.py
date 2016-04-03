@@ -23,7 +23,7 @@ class ActivityInBoundsRegularizer(Regularizer):
         self.high = high
 
     def __call__(self, loss):
-        activation = self.layer.get_input(True)
+        activation = self.layer.input
         l = K.switch(activation < self.low, K.abs(activation - self.low), 0)
         h = K.switch(activation > self.high, K.abs(activation - self.high), 0)
         return loss + K.sum(h + l)
