@@ -55,13 +55,13 @@ class Split(Layer):
 
 class Swap(Layer):
     def __init__(self, a, b, **kwargs):
-        super(Swap, self).__init__(**kwargs)
         self.a = a
         self.b = b
         self.trainable_weights = []
         self.regularizers = []
         self.constraints = []
         self.updates = []
+        super(Swap, self).__init__(**kwargs)
 
     def get_output(self, train=False):
         X = self.get_input(train)
