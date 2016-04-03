@@ -15,17 +15,6 @@
 import theano.tensor as T
 
 
-def get_output(layer, train, cache=None):
-    layer_id = '%s_%s' % (id(layer), train)
-    if cache is not None:
-        if layer_id in cache:
-            return cache[layer_id]
-    output = layer.get_output(train=train)
-    if cache is not None:
-        cache[layer_id] = output
-    return output
-
-
 def add_border(input, border, mode='repeat'):
     if mode == 'repeat':
         return add_border_repeat(input, border)
