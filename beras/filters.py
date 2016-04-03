@@ -16,16 +16,12 @@ import theano
 import theano.tensor as T
 from beras.util import add_border
 
-from keras.layers.convolutional import Convolution2D
 from keras.backend.common import floatx, cast_to_floatx
 import numpy as np
+import keras.backend as K
 
 
 def sobel(img, border_mode='reflect'):
-    conv_x = Convolution2D(1, 3, 3, border_mode='valid',
-                           input_shape=(1, None, None))
-    conv_y = Convolution2D(1, 3, 3, border_mode='valid',
-                           input_shape=(1, None, None))
     filter = np.array([
         [1, 0, -1],
         [2, 0, -2],
@@ -33,11 +29,13 @@ def sobel(img, border_mode='reflect'):
     ], dtype=floatx())
     if add_border:
         img = add_border(img, border=1, mode=border_mode)
-    conv_x.W = theano.shared(filter[np.newaxis, np.newaxis])
-    conv_y.W = theano.shared(np.transpose(filter)[np.newaxis, np.newaxis])
-    conv_x.input = img
-    conv_y.input = img
-    return conv_x.get_output(train=False), conv_y.get_output(train=False)
+    kernel_x = theano.shared(filter[np.newaxis, np.newaxis])
+    kernel_y = theano.shared(np.transpose(filter)[np.newaxis, np.newaxis])
+    conv_x = K.conv2d(img, kernel_x, border_mode='valid',
+                      image_shape=(1, None, None), filter_shape=(1, 1, 3, 3))
+    conv_y = K.conv2d(img, kernel_y, border_mode='valid',
+                      image_shape=(1, None, None), filter_shape=(1, 1, 3, 3))
+    return conv_x, conv_y
 
 
 def gaussian_kernel_default_radius(sigma, window_radius=None):
