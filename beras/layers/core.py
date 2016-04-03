@@ -34,13 +34,13 @@ class Split(Layer):
     def output_shape(self):
         shp = self.input_shape
         new_shp = []
-        length = (self.stop - self.start) / abs(self.step)
+        length = (self.stop - self.start) // abs(self.step)
         for i in range(len(shp)):
             if i == self.axis:
                 new_shp.append(length)
             else:
                 new_shp.append(shp[i])
-        return new_shp
+        return tuple(new_shp)
 
     def get_output(self, train=False):
         X = self.get_input(train)
