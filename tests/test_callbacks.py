@@ -27,7 +27,7 @@ import pytest
 
 def test_save_models(tmpdir):
     m = Sequential()
-    m.add(Dense(3))
+    m.add(Dense(3, input_dim=3))
     fname = str(tmpdir) + "/test.hdf5"
     cb = SaveModels({fname: m}, every_epoch=10)
     cb.on_epoch_end(0)
@@ -38,7 +38,7 @@ def test_save_models(tmpdir):
 
 def test_save_models_overwrite(tmpdir):
     m = Sequential()
-    m.add(Dense(3))
+    m.add(Dense(3, input_dim=3))
     fname = str(tmpdir) + "/test.hdf5"
     cb = SaveModels({fname: m}, every_epoch=10, overwrite=False)
     cb.on_epoch_end(9)
@@ -49,7 +49,7 @@ def test_save_models_overwrite(tmpdir):
 
 def test_save_models_output_dir(tmpdir):
     m = Sequential()
-    m.add(Dense(3))
+    m.add(Dense(3, input_dim=3))
     fname = "test.hdf5"
     cb = SaveModels({fname: m}, output_dir=str(tmpdir), every_epoch=10)
     cb.on_epoch_end(9)
