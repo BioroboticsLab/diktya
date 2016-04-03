@@ -13,26 +13,34 @@
 
 from seya.layers.attention import SpatialTransformer
 from keras.models import Sequential
-from keras.layers.core import Layer
+from keras.layers.core import InputSpec
+from keras.engine.topology import InputLayer
 import theano.tensor as T
 
 
 class RotationTransformer(SpatialTransformer):
     '''A Spatial Transformer limitted to rotation '''
-    def __init__(self, rot_layer, *args, **kwargs):
-        self.rot_layer = rot_layer
+    def __init__(self, *args, **kwargs):
         fake_model = Sequential()
-        fake_model.add(Layer(input_shape=(1, 1, 1)))
+        fake_model.add(InputLayer(input_shape=(1, 1, 1)))
         super().__init__(fake_model, *args, **kwargs)
 
-    @property
-    def output_shape(self):
-        return self.input_shape
+    def get_output_shape_for(self, input_shapes):
+        x_input_shape, rot_input_shape = input_shapes
+        return [x_input_shape, rot_input_shape[:1] + (6,)]
 
-    def get_output(self, train=False):
-        X = self.get_input(train)
-        rot_angle = self.rot_layer.get_output(train)
-        rot_angle = rot_angle.reshape((X.shape[0], 1))
+    def build(self, input_shape):
+        self.input_spec = [InputSpec(ndim=4), InputSpec(ndim=2)]
+
+    def compute_mask(self, input, mask=None):
+        return [None, None]
+
+    def call(self, inputs, mask=None):
+        if type(inputs) is not list or len(inputs) != 2:
+            raise Exception(
+                'RotationTransformer must be called with two tensors')
+
+        x, rot_angle = inputs
 
         # set up rotation matrix
         cos = T.cos(rot_angle)
@@ -41,27 +49,5 @@ class RotationTransformer(SpatialTransformer):
         theta = T.concatenate([cos, -sin, zeros, sin, cos, zeros],
                               axis=1).reshape((-1, 2, 3))
 
-        output = self._transform(theta, X, self.downsample_factor)
-        if self.return_theta:
-            return theta.reshape((X.shape[0], 2, 3))
-        else:
-            return output
-
-
-class GraphSpatialTransformer(SpatialTransformer):
-    '''A Spatial Transformer limitted to rotation '''
-    def __init__(self, layer, *args, **kwargs):
-        self.layer = layer
-        fake_model = Sequential()
-        fake_model.add(Layer(input_shape=(1, 1, 1)))
-        super().__init__(fake_model, *args, **kwargs)
-
-    @property
-    def output_shape(self):
-        return self.input_shape
-
-    def get_output(self, train=False):
-        X = self.get_input(train)
-        theta = self.layer.get_output(train)
-        theta = theta.reshape((X.shape[0], 2, 3))
-        return self._transform(theta, X, self.downsample_factor)
+        output = self._transform(theta, x, self.downsample_factor)
+        return [output, theta.reshape((x.shape[0], 6))]

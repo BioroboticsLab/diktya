@@ -18,10 +18,9 @@ from unittest.mock import Mock
 import math
 from keras.layers.convolutional import Convolution2D
 from keras.layers.core import Dense, Flatten, Dropout
-from keras.models import Sequential, Graph
-from seya.data_utils import floatX
-import theano
-
+from keras.engine.topology import Input
+from keras.models import Sequential, Model
+import keras.backend as K
 from beras.layers.attention import RotationTransformer
 import numpy as np
 
@@ -29,24 +28,18 @@ import numpy as np
 def test_rotates_images():
     bs = 3
     shape = (1, 8, 8)
-    img = theano.shared(np.zeros((bs, 1, 8, 8), dtype=floatX))
+    img = np.zeros((bs, 1, 8, 8), dtype=K.floatx())
+    angle = np.asarray([0, math.pi / 2, math.pi], dtype=K.floatx())
 
-    angle = np.asarray([0, math.pi / 2, math.pi], dtype=floatX)
-    angle = theano.shared(angle)
+    img_input = Input(shape=shape)
+    rot_input = Input(shape=(1,))
+    rot_layer = RotationTransformer()([img_input, rot_input])
+    model = Model(input=[img_input, rot_input], output=rot_layer)
 
-    locnet = Mock()
-    locnet.layers = [Mock()]
-    locnet.layers[0].input = img
-    locnet.get_output = Mock(return_value=angle)
-    assert locnet.get_output() == angle
-    rot_layer = RotationTransformer(locnet, return_theta=True,
-                                    input_shape=shape)
-    rot_layer.set_input_shape(shape)
-    rot_layer.input = img
-    theta = rot_layer.get_output()
-    np_theta = theta.eval()
+    model.compile('adam', 'mse')
+    _, theta = model.predict([img, angle])
     np.testing.assert_almost_equal(
-        np_theta,
+        theta.reshape(-1, 2, 3),
         np.asarray([
             [[1, 0, 0],
              [0, 1, 0]],
@@ -58,46 +51,3 @@ def test_rotates_images():
         ]),
         verbose=True
     )
-
-
-def get_net():
-    rotnet = Sequential()
-    rotnet.add(Convolution2D(1, 2, 2, input_shape=(1, 8, 8)))
-    rotnet.add(Dropout(0.5))
-    rotnet.add(Convolution2D(1, 2, 2))
-    rotnet.add(Dropout(0.5))
-    rotnet.add(Flatten())
-    rotnet.add(Dense(1))
-
-    net = Graph()
-    net.add_input('input', input_shape=(1, 8, 8))
-    net.add_node(rotnet, 'rot', input='input')
-    net.add_node(RotationTransformer(rotnet), 'input_rot', input='input')
-    net.add_node(Convolution2D(1, 2, 2), 'conv', input='input_rot')
-    net.add_node(Flatten(), 'flatten', input='conv')
-    net.add_node(Dense(10), 'output', input='flatten', create_output=True)
-    return net, rotnet
-
-
-def test_rotnet_predict():
-    net, _ = get_net()
-    net.compile("adam", {"output": "mse"})
-    net.predict({'input': np.random.sample((128, 1, 8, 8))})
-
-
-def test_save_and_loads_weights():
-    dirname = tempfile.mkdtemp()
-    try:
-        save_path = os.path.join(dirname, "test_net.hdf5")
-        net_save, rotnet_save = get_net()
-        net_load, rotnet_load = get_net()
-        net_save.save_weights(save_path)
-        net_load.load_weights(save_path)
-        for s, l in zip(net_save.trainable_weights,
-                        net_load.trainable_weights):
-            assert (s.get_value() == l.get_value()).all()
-        for s, l in zip(rotnet_save.trainable_weights,
-                        rotnet_load.trainable_weights):
-            assert (s.get_value() == l.get_value()).all()
-    finally:
-        shutil.rmtree(dirname)
