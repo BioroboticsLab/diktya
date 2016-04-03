@@ -32,9 +32,11 @@ def sobel(img, border_mode='reflect'):
     kernel_x = theano.shared(filter[np.newaxis, np.newaxis])
     kernel_y = theano.shared(np.transpose(filter)[np.newaxis, np.newaxis])
     conv_x = K.conv2d(img, kernel_x, border_mode='valid',
-                      image_shape=(1, None, None), filter_shape=(1, 1, 3, 3))
+                      image_shape=(None, 1, None, None),
+                      filter_shape=(1, 1, 3, 3))
     conv_y = K.conv2d(img, kernel_y, border_mode='valid',
-                      image_shape=(1, None, None), filter_shape=(1, 1, 3, 3))
+                      image_shape=(None, 1, None, None),
+                      filter_shape=(1, 1, 3, 3))
     return conv_x, conv_y
 
 
