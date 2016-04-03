@@ -60,19 +60,33 @@ def gan_generator_kl(d_out_given_fake_for_gen,
     d_loss = d_loss_real + d_loss_fake
 
     d = d_out_given_fake_for_gen
-    g_loss = - T.log(d / (1 - d)).mean()
+    e = 1e-7
+    g_loss = - T.log(T.clip(d / (1 - d + e), e, 1 - e)).mean()
+    return g_loss, d_loss, d_loss_real, d_loss_fake
+
+
+def gan_generator_neg_log(d_out_given_fake_for_gen, d_out_given_fake_for_dis,
+                          d_out_given_real):
+    d_loss_fake = binary_crossentropy(
+        T.zeros_like(d_out_given_fake_for_dis),
+        d_out_given_fake_for_dis).mean()
+    d_loss_real = binary_crossentropy(
+        T.ones_like(d_out_given_real),
+        d_out_given_real).mean()
+    d_loss = d_loss_real + d_loss_fake
+
+    d = d_out_given_fake_for_gen
+    g_loss = - T.log(T.clip(d, 1e-7, 1 - 1e-7)).mean()
     return g_loss, d_loss, d_loss_real, d_loss_fake
 
 
 def gan_linear_losses(d_out_given_fake_for_gen,
                       d_out_given_fake_for_dis, d_out_given_real):
     g_loss = -d_out_given_fake_for_gen.mean()
-    d_out_given_fake = d_out_given_fake_for_dis
-    d_loss_fake = d_out_given_fake.mean()
-    d_loss_fake = d_loss_fake + d_loss_fake**2
-    d_loss_real = -d_out_given_real.mean()
-    d_loss_real = d_loss_real + d_loss_real**2
-    d_loss = d_loss_real + d_loss_fake
+    d_loss_fake = d_out_given_fake_for_dis.mean()
+    d_loss_real = d_out_given_real.mean()
+
+    d_loss = d_loss_fake - d_loss_real + d_loss_fake**2 + d_loss_real**2
     return g_loss, d_loss, d_loss_real, d_loss_fake
 
 
