@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 from collections import OrderedDict
 from keras.objectives import binary_crossentropy
 import keras.backend as K
@@ -21,12 +20,13 @@ import theano
 import theano.tensor as T
 import numpy as np
 from theano.ifelse import ifelse
-from keras.models import Graph, Sequential
+from keras.models import Sequential
 import keras.optimizers
 from keras.optimizers import Optimizer
 from keras.callbacks import Callback
 from keras.engine.topology import Container, Input, merge
 from beras.models import AbstractModel
+from beras.util import collect_layers
 
 
 def flatten(listOfLists):
@@ -93,15 +93,21 @@ def gan_linear_losses(d_out_given_fake_for_gen,
 
 def sequential_to_gan(generator: Sequential, discriminator: Sequential,
                       nb_real=32, nb_fake=96):
-    generator.inputs[0].name = 'z'
-    fake = Input(shape=discriminator.input_shape[1:], name='fake')
-    real = Input(shape=discriminator.input_shape[1:], name='real')
-    dis_in = merge([fake, real], concat_axis=0, mode='concat')
-    dis = discriminator(dis_in)
-    dis_outputs = gan_outputs(dis, fake_for_gen=(0, nb_fake),
-                              fake_for_dis=(nb_fake - nb_real, nb_real),
-                              real=(nb_fake, nb_fake + nb_real))
-    return GAN(generator, Container([fake, real], dis_outputs))
+    def generator_fn(inputs):
+        z, = inputs
+        return generator(z)
+
+    def discriminator_fn(inputs):
+        fake, real = inputs
+        dis_in = merge([fake, real], concat_axis=0, mode='concat')
+        dis = discriminator(dis_in)
+        dis_outputs = gan_outputs(dis, fake_for_gen=(0, nb_fake),
+                                  fake_for_dis=(nb_fake - nb_real, nb_real),
+                                  real=(nb_fake, nb_fake + nb_real))
+        return dis_outputs
+    return GAN(generator_fn, discriminator_fn,
+               z_shape=generator.input_shape[1:],
+               real_shape=discriminator.input_shape[1:])
 
 
 def gan_outputs(discriminator,
@@ -174,36 +180,49 @@ class GAN(AbstractModel):
             d_loss = self._apply_l2_regulizer(params, d_loss)
             return g_loss, d_loss
 
-    def __init__(self, generator: Container, discriminator: Container):
-        assert len(generator.inputs) >= 1
-        assert len(discriminator.inputs) >= 2
+    def __init__(self, generator: '(inputs) -> Container',
+                 discriminator: '(inputs) -> Container',
+                 z_shape, real_shape, gen_additional_inputs=[],
+                 dis_additional_inputs=[],
+                 ):
+        self.generator_func = generator
+        self.discriminator_func = discriminator
 
-        self.generator = generator
-        self.discriminator = discriminator
+        self.z_shape = (None,) + z_shape
+        self.real_shape = (None,) + real_shape
+        self.z = Input(batch_shape=self.z_shape, name='z')
+        self.real = Input(batch_shape=self.real_shape, name='real')
 
-        self.z = generator.inputs[self.z_idx]
+        self.gen_inputs = [self.z] + gen_additional_inputs
+        self.fake = self.generator_func(self.gen_inputs)
 
-        assert self.z.name == 'z'
-        assert discriminator.inputs[self.fake_idx].name == 'fake'
-        self.real = discriminator.inputs[self.real_idx]
-        assert self.real.name == 'real'
+        self.gen_layers = collect_layers(self.gen_inputs, [self.fake])
+        self.dis_inputs = [self.fake, self.real] + dis_additional_inputs
 
-        self.inputs = generator.inputs + discriminator.inputs[1:]
-        self.input_order = [i.name for i in self.inputs]
+        self._maybe_duplicate_inputs = self.gen_inputs + [self.real] \
+            + dis_additional_inputs
+        self.dis_outs = self.discriminator_func(self.dis_inputs)
+        assert len(self.dis_outs) == 3, \
+            "The discriminator must return 3 tensors"
+        self.dis_layers = collect_layers(self.dis_inputs, self.dis_outs)
         self._gan_regularizers = []
         self.updates = []
         self.metrics = OrderedDict()
         self._is_built = False
 
     @property
-    def z_shape(self):
-        return self.z_layer.input_shape
+    def inputs(self):
+        inputs_set = set()
+        inputs = []
+        for input in self._maybe_duplicate_inputs:
+            if input not in inputs_set:
+                inputs_set.add(input)
+                inputs.append(input)
+        return inputs
 
     @property
-    def z_layer(self):
-        if not hasattr(self.generator, 'input_layers'):
-            self.generator.build()
-        return self.generator.input_layers[self.z_idx]
+    def input_order(self):
+        return [i.name for i in self.inputs]
 
     def debug_dict(self, train=False):
         self._ensure_build()
@@ -236,19 +255,35 @@ class GAN(AbstractModel):
         self.metrics['d_loss_gen'] = d_loss_gen
         self.metrics['d_loss_real'] = d_loss_real
 
+    def _gather_list_attr(self, layers, attr):
+        all_attrs = []
+        for layer in layers:
+            all_attrs += getattr(layer, attr, [])
+        return all_attrs
+
+    def _gather_dict_attr(self, layers, attr):
+        all_attrs = {}
+        for layer in layers:
+            layer_dict = getattr(layer, attr, {})
+            all_attrs = dict(list(all_attrs.items()) +
+                             list(layer_dict.items()))
+        return all_attrs
+
     def build(self, g_optimizer: Optimizer, d_optimizer: Optimizer,
               loss):
         assert not self._is_built
 
-        def get_updates(optimizer, container, loss):
+        def get_updates(optimizer, layers, loss):
             optimizer = keras.optimizers.get(optimizer)
-            for r in container.regularizers:
+            for r in self._gather_list_attr(layers, 'regularizers'):
                 loss += r(loss)
-            updates = optimizer.get_updates(container.trainable_weights,
-                                            container.constraints, loss)
-            return updates + container.updates
+            updates = optimizer.get_updates(
+                self._gather_list_attr(layers, 'trainable_weights'),
+                self._gather_dict_attr(layers, 'constraints'),
+                loss)
+            return updates + self._gather_list_attr(layers, 'updates')
 
-        d_outs = self.discriminator([self.generator.output, self.real])
+        d_outs = self.dis_outs
         d_out_given_fake_gen = d_outs[self.dis_out_given_fake_for_gen_idx]
         d_out_given_fake_dis = d_outs[self.dis_out_given_fake_for_dis_idx]
         d_out_given_real = d_outs[self.dis_out_given_real_idx]
@@ -262,8 +297,8 @@ class GAN(AbstractModel):
 
         self._set_loss_metrics(g_loss, d_loss, *losses[2:])
 
-        g_updates = get_updates(g_optimizer, self.generator, g_loss)
-        d_updates = get_updates(d_optimizer, self.discriminator, d_loss)
+        g_updates = get_updates(g_optimizer, self.gen_layers, g_loss)
+        d_updates = get_updates(d_optimizer, self.dis_layers, d_loss)
 
         self.g_updates = g_updates
         self.d_updates = d_updates
@@ -288,8 +323,8 @@ class GAN(AbstractModel):
         assert self._is_built, \
             "Did you forget to call `build()`, before `compile_generate`?"
         self._generate = K.function(
-            self.generator.inputs,
-            self.generator.outputs)
+            self.gen_inputs,
+            self.fake)
 
     def compile_debug(self, train=False):
         assert self._is_built, \
@@ -318,6 +353,7 @@ class GAN(AbstractModel):
 
             ins = []
             for name in self.input_order:
+                print(name)
                 b = batch_size[name]
                 e = b + batch_size[name]
                 ins.append(data[name][b:e])
@@ -361,7 +397,7 @@ class GAN(AbstractModel):
             inputs['z'] = np.random.uniform(-1, 1, z_shape)
         ins = [inputs[n] for n in self.input_order
                if n in inputs]
-        assert len(ins) == len(self.generator.inputs)
+        assert len(ins) == len(self.gen_inputs)
         return self._generate(ins)
 
     def debug(self, inputs={}):
