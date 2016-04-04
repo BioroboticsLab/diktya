@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras.engine.topology import merge
 import theano.tensor as T
 import copy
 
@@ -86,6 +87,16 @@ def sequential(layers):
             x = l(x)
         return x
     return call
+
+
+def concat(tensors, axis=1, name=None, output_shape=None):
+    if tensors not in (list, tuple):
+        return tensors
+    elif len(tensors) == 1:
+        return tensors[0]
+
+    return merge(tensors, mode='concat', concat_axis=axis,
+                 name=name, output_shape=output_shape)
 
 
 def collect_layers(inputs, outputs):
