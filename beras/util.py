@@ -79,6 +79,15 @@ def add_border_reflect(input, border):
     return wb
 
 
+def sequential(layers):
+    def call(input):
+        x = input
+        for l in layers:
+            x = l(x)
+        return x
+    return call
+
+
 def collect_layers(inputs, outputs):
     # container_nodes: set of nodes included in the graph
     # (not all nodes included in the layers are relevant to the current graph).

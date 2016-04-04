@@ -15,11 +15,12 @@ from timeit import Timer
 
 import theano
 import numpy as np
-from beras.util import add_border_reflect, collect_layers
+from beras.util import add_border_reflect, collect_layers, sequential
 import matplotlib.pyplot as plt
 from conftest import plt_save_and_maybe_show
 from keras.layers.core import Dense
 from keras.engine.topology import Input, merge
+from keras.models import Model
 import pytest
 
 
@@ -107,3 +108,17 @@ def test_collect_layers_mimo():
     # missing inputs are detected
     with pytest.raises(Exception):
         layers = collect_layers([x], [c, e])
+
+
+def test_sequential():
+    x = Input(shape=(20,))
+    seq = sequential([
+        Dense(20),
+        Dense(10),
+        Dense(1),
+    ])
+
+    out = seq(x)
+    model = Model([x], [out])
+    model.compile('adam', 'mse')
+    model.predict(np.random.sample((64, 20)))
