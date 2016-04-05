@@ -90,7 +90,7 @@ def sequential(layers):
 
 
 def concat(tensors, axis=1, name=None, output_shape=None):
-    if tensors not in (list, tuple):
+    if type(tensors) not in (list, tuple):
         return tensors
     elif len(tensors) == 1:
         return tensors[0]
