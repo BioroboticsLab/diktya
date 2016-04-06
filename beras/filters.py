@@ -27,14 +27,13 @@ def sobel(img, border_mode='reflect'):
         [2, 0, -2],
         [1, 0, -1],
     ], dtype=floatx())
-    if add_border:
-        img = add_border(img, border=1, mode=border_mode)
+    img, conv_border = add_border(img, border=1, mode=border_mode)
     kernel_x = theano.shared(filter[np.newaxis, np.newaxis])
     kernel_y = theano.shared(np.transpose(filter)[np.newaxis, np.newaxis])
-    conv_x = K.conv2d(img, kernel_x, border_mode='valid',
+    conv_x = K.conv2d(img, kernel_x, border_mode=conv_border,
                       image_shape=(None, 1, None, None),
                       filter_shape=(1, 1, 3, 3))
-    conv_y = K.conv2d(img, kernel_y, border_mode='valid',
+    conv_y = K.conv2d(img, kernel_y, border_mode=conv_border,
                       image_shape=(None, 1, None, None),
                       filter_shape=(1, 1, 3, 3))
     return conv_x, conv_y
@@ -89,45 +88,68 @@ def gaussian_kernel_1d(sigma, window_radius=None):
     return kernel
 
 
+def _get_chained_w_h_conv_border(mode, axis):
+    if type(mode) == int:
+        if axis == 'w':
+            return (0, mode)
+        elif axis == 'h':
+            return (mode, 0)
+        else:
+            Exception("Unknown axis {}".format(mode))
+    else:
+        return mode
+
+
 def gaussian_filter_2d(input, sigma, window_radius=None,
-                       border_mode='reflect'):
+                       border_mode='zero'):
     bs, ch, h, w = input.shape
     ndim = 4
     assert input.ndim == ndim, \
         "there must be {} dimensions, got {}".format(ndim, input.ndim)
     window_radius = gaussian_kernel_default_radius(sigma, window_radius)
     input = input.reshape((bs*ch, 1, h, w))
-    padded_input = add_border(input, window_radius, border_mode)
     filter_1d = gaussian_kernel_1d(sigma, window_radius)
     dimpattern_w = ('x', 'x', 0, 1)
     dimpattern_h = ('x', 'x', 1, 0)
     filter_w = filter_1d.dimshuffle(dimpattern_w)
-    blur_w = T.nnet.conv2d(padded_input,
-                           filter_w, border_mode='valid',
-                           filter_shape=[1, 1, 1, None])
+    padded_input, conv_border = add_border(input, window_radius, border_mode)
+
+    blur_w = T.nnet.conv2d(
+        padded_input, filter_w,
+        border_mode=_get_chained_w_h_conv_border(conv_border, 'w'),
+        filter_shape=[1, 1, 1, None])
     filter_h = filter_1d.dimshuffle(dimpattern_h)
-    blured = T.nnet.conv2d(blur_w, filter_h, border_mode='valid',
-                           filter_shape=[1, 1, None, 1])
+
+    blured = T.nnet.conv2d(
+        blur_w, filter_h,
+        border_mode=_get_chained_w_h_conv_border(conv_border, 'h'),
+        filter_shape=[1, 1, None, 1])
     return blured.reshape((bs, ch, h, w))
 
 
-def gaussian_filter_2d_variable_sigma(input, sigmas, window_radius=None):
+def gaussian_filter_2d_variable_sigma(input, sigmas,
+                                      window_radius=None,
+                                      border_mode='zero'
+                                      ):
     def filter_sigma(idx, kernel):
         dimpattern_w = ('x', 'x', 'x', 0)
         dimpattern_h = ('x', 'x', 0, 'x')
         filter_w = kernel.dimshuffle(dimpattern_w)
-        blur_w = T.nnet.conv2d(padded_input[idx:idx+1],
-                               filter_w, border_mode='valid',
-                               filter_shape=[1, 1, 1, None])
+        blur_w = T.nnet.conv2d(
+            padded_input[idx:idx+1], filter_w,
+            border_mode=_get_chained_w_h_conv_border(conv_border, 'w'),
+            filter_shape=[1, 1, 1, None])
         filter_h = kernel.dimshuffle(dimpattern_h)
-        return T.nnet.conv2d(blur_w, filter_h, border_mode='valid',
-                             filter_shape=[1, 1, None, 1])
+        return T.nnet.conv2d(
+            blur_w, filter_h,
+            border_mode=_get_chained_w_h_conv_border(conv_border, 'h'),
+            filter_shape=[1, 1, None, 1])
+
     ndim = 4
-    border_mode = 'reflect'
     assert input.ndim == ndim, \
         "there must be {} dimensions, got {}".format(ndim, input.ndim)
     window_radius = gaussian_kernel_default_radius(sigmas, window_radius)
-    padded_input = add_border(input, window_radius, border_mode)
+    padded_input, conv_border = add_border(input, window_radius, border_mode)
     kernel = gaussian_kernel_1d(sigmas, window_radius)
     blur, _ = theano.map(
         filter_sigma,

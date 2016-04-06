@@ -19,9 +19,13 @@ import copy
 
 def add_border(input, border, mode='repeat'):
     if mode == 'repeat':
-        return add_border_repeat(input, border)
+        return add_border_repeat(input, border), 'valid'
     elif mode == 'reflect':
-        return add_border_reflect(input, border)
+        return add_border_reflect(input, border), 'valid'
+    elif mode == 'zero':
+        if hasattr(border, 'eval'):
+            border = int(border.eval())
+        return input, border
     else:
         raise ValueError("Invalid mode: {}".format(mode))
 

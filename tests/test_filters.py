@@ -51,30 +51,35 @@ def test_gaussian_kernel_1d():
 def test_gaussian_filter_2d(astronaut):
     astronaut = astronaut[::2, ::2]
     astronaut_stacked = np.stack([astronaut, astronaut.T])
-    img = theano.shared(astronaut_stacked[np.newaxis])
-    sigma = 3
-    theano_blur = gaussian_filter_2d(img, sigma)
-    blur = theano_blur.eval()
-    assert blur.shape == (1, 2, 64, 64)
-    blur = blur[0]
-    expected = skimage.filters.gaussian_filter(astronaut, sigma,
-                                               mode='mirror')
-    expected_transposed = skimage.filters.gaussian_filter(astronaut.T, sigma,
-                                                          mode='mirror')
-    np.testing.assert_allclose(blur[0], expected, rtol=0.01, atol=0.02)
-    np.testing.assert_allclose(blur[1], expected_transposed,
-                               rtol=0.01, atol=0.02)
-    plt.subplot(221)
-    plt.imshow(blur[0], cmap='gray')
-    plt.subplot(222)
-    plt.imshow(expected, cmap='gray')
 
-    plt.subplot(223)
-    plt.imshow(blur[1], cmap='gray')
-    plt.subplot(224)
-    plt.imshow(expected_transposed, cmap='gray')
+    def test_border_mode(mode, skimage_mode):
+        img = theano.shared(astronaut_stacked[np.newaxis])
+        sigma = 3
+        theano_blur = gaussian_filter_2d(img, sigma, border_mode=mode)
+        blur = theano_blur.eval()
+        assert blur.shape == (1, 2, 64, 64)
+        blur = blur[0]
+        expected = skimage.filters.gaussian_filter(
+            astronaut, sigma, mode=skimage_mode)
+        expected_transposed = skimage.filters.gaussian_filter(
+            astronaut.T, sigma, mode=skimage_mode)
+        np.testing.assert_allclose(blur[0], expected, rtol=0.001, atol=0.002)
+        np.testing.assert_allclose(blur[1], expected_transposed,
+                                   rtol=0.001, atol=0.002)
+        plt.subplot(221)
+        plt.imshow(blur[0], cmap='gray')
+        plt.subplot(222)
+        plt.imshow(expected, cmap='gray')
 
-    plt_save_and_maybe_show("test_gaussian_blur_2d.png")
+        plt.subplot(223)
+        plt.imshow(blur[1], cmap='gray')
+        plt.subplot(224)
+        plt.imshow(expected_transposed, cmap='gray')
+
+        plt_save_and_maybe_show("test_gaussian_blur_2d_{}.png".format(mode))
+
+    test_border_mode('reflect', 'mirror')
+    test_border_mode('zero', 'constant')
 
 
 def test_gaussian_filter_2d_variable_sigma(astronaut):
@@ -88,7 +93,8 @@ def test_gaussian_filter_2d_variable_sigma(astronaut):
     img = theano.shared(astronaut_stacked[:, np.newaxis])
     sigmas = np.array([3, 1, 2, 0.5], dtype=np.float32)
     sigmas_shared = theano.shared(sigmas)
-    theano_blur = gaussian_filter_2d_variable_sigma(img, sigmas_shared)
+    theano_blur = gaussian_filter_2d_variable_sigma(img, sigmas_shared,
+                                                    border_mode='reflect')
     blur = theano_blur.eval()
     assert blur.shape == (bs, 1, 64, 64)
     blur = blur.reshape(bs, 64, 64)
