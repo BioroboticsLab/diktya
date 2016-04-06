@@ -24,7 +24,7 @@ from keras.models import Sequential
 import keras.optimizers
 from keras.optimizers import Optimizer
 from keras.callbacks import Callback
-from keras.engine.topology import Container, Input, merge
+from keras.engine.topology import Input, merge
 from beras.models import AbstractModel
 from beras.util import collect_layers
 
@@ -184,6 +184,7 @@ class GAN(AbstractModel):
                  discriminator: '(inputs) -> Container',
                  z_shape, real_shape, gen_additional_inputs=[],
                  dis_additional_inputs=[],
+                 non_trainable_layers=set()
                  ):
         self.generator_func = generator
         self.discriminator_func = discriminator
@@ -209,6 +210,7 @@ class GAN(AbstractModel):
         self.updates = []
         self.metrics = OrderedDict()
         self._is_built = False
+        self.non_trainable_layers = set(non_trainable_layers)
 
     @property
     def inputs(self):
@@ -274,6 +276,7 @@ class GAN(AbstractModel):
         assert not self._is_built
 
         def get_updates(optimizer, layers, loss):
+            layers = set(layers) - set(self.non_trainable_layers)
             optimizer = keras.optimizers.get(optimizer)
             for r in self._gather_list_attr(layers, 'regularizers'):
                 loss += r(loss)
