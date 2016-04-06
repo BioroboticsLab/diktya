@@ -15,6 +15,7 @@
 from keras.engine.topology import merge
 import theano.tensor as T
 import copy
+from warnings import warn
 
 
 def add_border(input, border, mode='repeat'):
@@ -84,12 +85,27 @@ def add_border_reflect(input, border):
     return wb
 
 
-def sequential(layers):
+def sequential(layers, ns=None, trainable=True):
+    def flatten(xs):
+        for x in xs:
+            try:
+                for f in flatten(x):
+                    yield f
+            except TypeError:
+                yield x
+
+    if ns is not None:
+        for l in layers:
+            l.name = ns + '.' + l.name
+
     def call(input):
         x = input
-        for l in layers:
+        for l in flatten(layers):
             x = l(x)
+            if not trainable:
+                l.trainable_weights = []
         return x
+
     return call
 
 
@@ -221,3 +237,25 @@ def collect_layers(inputs, outputs):
     container_nodes = container_nodes
     nodes_by_depth = nodes_by_depth
     return layers
+
+
+def load_weights(layers, filepath):
+    '''Load all layer weights from a HDF5 save file. '''
+    import h5py
+    f = h5py.File(filepath, mode='r')
+
+    layer_names = [n.decode('utf8') for n in f.attrs['layer_names']]
+    if len(layer_names) != len(layers):
+        raise Exception('You are trying to load a weight file '
+                        'containing ' + str(len(layer_names)) +
+                        ' layers into a model with ' +
+                        str(len(layers)) + ' layers.')
+
+    for k, name in enumerate(layer_names):
+        g = f[name]
+        weight_names = [n.decode('utf8') for n in g.attrs['weight_names']]
+        if len(weight_names):
+            weights = [g[weight_name] for weight_name in weight_names]
+            layers[k].set_weights(weights)
+
+    f.close()

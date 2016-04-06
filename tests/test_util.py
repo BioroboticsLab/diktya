@@ -132,3 +132,55 @@ def test_sequential():
     model = Model([x], [out])
     model.compile('adam', 'mse')
     model.predict_on_batch(np.random.sample((64, 20)))
+
+
+def test_sequential_flatten():
+    x = Input(shape=(20,))
+    seq = sequential([
+        Dense(20),
+        [
+            Dense(10)
+        ],
+        [
+            [
+                Dense(1)
+            ],
+            Dense(1)
+        ]
+    ])
+    out = seq(x)
+    model = Model([x], [out])
+    model.compile('adam', 'mse')
+    model.predict_on_batch(np.random.sample((64, 20)))
+
+
+def test_sequential_trainable():
+    x = Input(shape=(20,))
+    dense1 = Dense(20)
+    dense2 = Dense(10)
+    dense3 = Dense(1)
+    seq = sequential([
+        dense1,
+        dense2,
+        dense3,
+    ], trainable=False)
+    seq(x)
+    assert dense1.trainable_weights == []
+    assert dense2.trainable_weights == []
+    assert dense3.trainable_weights == []
+
+
+def test_sequential_namespace():
+    x = Input(shape=(20,))
+    dense1 = Dense(20)
+    dense2 = Dense(10)
+    dense3 = Dense(1)
+    seq = sequential([
+        dense1,
+        dense2,
+        dense3,
+    ], ns='hello')
+    seq(x)
+    assert dense1.name.startswith('hello.')
+    assert dense2.name.startswith('hello.')
+    assert dense3.name.startswith('hello.')
