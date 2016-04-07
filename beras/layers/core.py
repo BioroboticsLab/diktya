@@ -80,7 +80,7 @@ class LinearInBounds(Layer):
 
     def call(self, x, mask=None):
         if self.clip:
-            return K.clip(x, self.activity_in_bounds.low,
+            return T.clip(x, self.activity_in_bounds.low,
                           self.activity_in_bounds.high)
         else:
             return x
