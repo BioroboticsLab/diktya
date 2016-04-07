@@ -54,3 +54,9 @@ class SumBelow(Regularizer):
             "name": self.__class__.__name__,
             "max_sum": self.max_sum,
         }
+
+
+def with_regularizer(layer, regularizer):
+    regularizer.set_layer(layer)
+    layer.regularizers.append(regularizer)
+    return layer
