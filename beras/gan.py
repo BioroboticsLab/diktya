@@ -220,6 +220,7 @@ class GAN(AbstractModel):
             if input not in inputs_set:
                 inputs_set.add(input)
                 inputs.append(input)
+        inputs.append(K.learning_phase())
         return inputs
 
     @property
@@ -319,7 +320,7 @@ class GAN(AbstractModel):
         assert self._is_built, \
             "Did you forget to call `build()`, before `compile_generate`?"
         self._generate = K.function(
-            self.gen_inputs,
+            self.gen_inputs + [K.learning_phase()],
             self.fake)
 
     def compile_debug(self):
@@ -369,6 +370,7 @@ class GAN(AbstractModel):
 
         def train(model, batch_index, batch_logs=None):
             ins = next(generator)
+            ins['keras_learning_phase'] = 1
             inputs = [ins[name] for name in self.input_order]
             outs = self._train(inputs)
             for key, value in zip(self.metrics.keys(), outs):
@@ -391,9 +393,11 @@ class GAN(AbstractModel):
                     z_shape = (nb_samples, ) + z_shape[1:]
             assert None not in z_shape
             inputs['z'] = np.random.uniform(-1, 1, z_shape)
+
+        inputs['keras_learning_phase'] = 0
         ins = [inputs[n] for n in self.input_order
                if n in inputs]
-        assert len(ins) == len(self.gen_inputs)
+        assert len(ins) == len(self.gen_inputs) + 1
         return self._generate(ins)
 
     def debug(self, inputs={}, train=True):
