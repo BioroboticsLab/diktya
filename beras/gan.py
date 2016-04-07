@@ -354,7 +354,9 @@ class GAN(AbstractModel):
 
             ins = []
             for name in self.input_order:
-                print(name)
+                if name == 'keras_learning_phase':
+                    ins.append(1)
+                    continue
                 b = batch_size[name]
                 e = b + batch_size[name]
                 ins.append(data[name][b:e])
