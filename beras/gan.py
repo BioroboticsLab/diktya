@@ -226,29 +226,22 @@ class GAN(AbstractModel):
     def input_order(self):
         return [i.name for i in self.inputs]
 
-    def debug_dict(self, train=False):
+    def debug_dict(self):
         self._ensure_build()
 
-        layers = self.layer_dict().items()
-        outs = OrderedDict([(name, self._get_output(node, train))
-                            for name, node in layers])
-        gen_layers = OrderedDict(
-            [(name, outs[name]) for name, node in layers
-             if name.startswith('gen')])
-        dis_layers = OrderedDict(
-            [(name, outs[name]) for name, node in layers
-             if name.startswith('dis')])
+        outs = OrderedDict([(l.name, l.output) for l in self.layers])
 
-        outs.update([('{}_grad'.format(name), g) for name, g in
-                     zip(gen_layers.keys(),
-                         T.grad(self.g_loss, list(gen_layers.values()),
+        outs.update([('{}_grad'.format(l.name), g) for l, g in
+                     zip(self.gen_layers,
+                         T.grad(self.g_loss,
+                                [l.output for l in self.gen_layers],
                                 disconnected_inputs='warn'))])
 
-        outs.update([('{}_grad'.format(name), g) for name, g in
-                     zip(dis_layers.keys(),
-                         T.grad(self.d_loss, list(dis_layers.values()),
-                                disconnected_inputs='warn')
-                         )])
+        outs.update([('{}_grad'.format(l.name), g) for l, g in
+                     zip(self.dis_layers,
+                         T.grad(self.d_loss,
+                                [l.output for l in self.dis_layers],
+                                disconnected_inputs='warn'))])
         return outs
 
     def _set_loss_metrics(self, g_loss, d_loss, d_loss_gen, d_loss_real):
@@ -329,11 +322,11 @@ class GAN(AbstractModel):
             self.gen_inputs,
             self.fake)
 
-    def compile_debug(self, train=False):
+    def compile_debug(self):
         assert self._is_built, \
             "Did you forget to call `build()`, before `compile_debug`?"
         self._debug = K.function(
-            self.inputs, list(self.debug_dict(train).values()))
+            self.inputs, list(self.debug_dict().values()))
 
     def add_gan_regularizer(self, r):
         r.set_gan(self)
@@ -403,7 +396,8 @@ class GAN(AbstractModel):
         assert len(ins) == len(self.gen_inputs)
         return self._generate(ins)
 
-    def debug(self, inputs={}):
+    def debug(self, inputs={}, train=True):
+        inputs['keras_learning_phase'] = int(train)
         ins = [inputs[n] for n in self.input_order]
         outs = self._debug(ins)
         return dict(zip(self.debug_dict().keys(), outs))
