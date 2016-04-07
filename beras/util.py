@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras.engine.topology import merge
+from keras.engine.topology import merge, InputLayer
 import theano.tensor as T
 import copy
 from warnings import warn
@@ -239,11 +239,13 @@ def collect_layers(inputs, outputs):
     return layers
 
 
-def load_weights(layers, filepath):
+def load_weights(layers, filepath, nb_input_layers=1):
     '''Load all layer weights from a HDF5 save file. '''
     import h5py
     f = h5py.File(filepath, mode='r')
 
+    layers = [InputLayer(input_shape=(1,))
+              for _ in range(nb_input_layers)] + layers
     layer_names = [n.decode('utf8') for n in f.attrs['layer_names']]
     if len(layer_names) != len(layers):
         raise Exception('You are trying to load a weight file '
