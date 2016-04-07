@@ -93,16 +93,15 @@ def sequential(layers, ns=None, trainable=True):
             except TypeError:
                 yield x
 
-    if ns is not None:
-        for l in layers:
+    for l in flatten(layers):
+        if ns is not None:
             l.name = ns + '.' + l.name
+        l.trainable = trainable
 
     def call(input):
         x = input
         for l in flatten(layers):
             x = l(x)
-            if not trainable:
-                l.trainable_weights = []
         return x
 
     return call
@@ -118,7 +117,19 @@ def concat(tensors, axis=1, name=None, output_shape=None):
                  name=name, output_shape=output_shape)
 
 
+def namespace(namespace, inputs, outputs):
+    layers = collect_layers(inputs, outputs)
+    for l in layers:
+        l.name = namespace + '.' + l.name
+
+
 def collect_layers(inputs, outputs):
+    if type(inputs) not in (tuple, list):
+        inputs = [inputs]
+
+    if type(outputs) not in (tuple, list):
+        outputs = [outputs]
+
     # container_nodes: set of nodes included in the graph
     # (not all nodes included in the layers are relevant to the current graph).
     container_nodes = set()  # ids of all nodes relevant to the Container
