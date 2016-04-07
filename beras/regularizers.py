@@ -24,6 +24,11 @@ class ActivityInBoundsRegularizer(Regularizer):
         self.uses_learning_phase = True
 
     def __call__(self, loss):
+        if not hasattr(self, 'layer'):
+            raise Exception('Need to call `set_layer` on '
+                            'ActivityInBoundsRegularizer instance '
+                            'before calling the instance.')
+
         activation = self.layer.input
         l = K.switch(activation < self.low, K.abs(activation - self.low), 0)
         h = K.switch(activation > self.high, K.abs(activation - self.high), 0)
@@ -37,12 +42,17 @@ class ActivityInBoundsRegularizer(Regularizer):
         }
 
 
-class SumBelow(Regularizer):
+class SumOfActivityBelowRegularizer(Regularizer):
     def __init__(self, max_sum):
         self.max_sum = K.variable(max_sum)
         self.uses_learning_phase = True
 
     def __call__(self, loss):
+        if not hasattr(self, 'layer'):
+            raise Exception(
+                'Need to call `set_layer` on SumOfActivityBelowRegularizer '
+                'instance before calling the instance.')
+
         activation = self.layer.get_output(True)
         axes = (i for i in range(1, len(self.layer.output_shape)))
         sum = K.sum(activation, axis=axes)
