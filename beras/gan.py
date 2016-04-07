@@ -227,6 +227,10 @@ class GAN(AbstractModel):
     def input_order(self):
         return [i.name for i in self.inputs]
 
+    @property
+    def layers(self):
+        return self.gen_layers + self.dis_layers
+
     def debug_dict(self):
         self._ensure_build()
 
