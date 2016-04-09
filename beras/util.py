@@ -15,6 +15,7 @@
 from keras.engine.topology import merge, InputLayer
 import theano.tensor as T
 import copy
+import re
 
 
 def add_border(input, border, mode='repeat'):
@@ -93,9 +94,13 @@ def sequential(layers, ns=None, trainable=True):
             except TypeError:
                 yield x
 
-    for l in flatten(layers):
+    for i, l in enumerate(flatten(layers)):
+        l.name.split('_')
         if ns is not None:
-            l.name = ns + '.' + l.name
+            if '.' not in l.name:
+                name = re.sub('_\d+$', '', l.name)
+                name = "{:02}_{}".format(i, name)
+            l.name = ns + '.' + name
         l.trainable = trainable
 
     def call(input):

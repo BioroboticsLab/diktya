@@ -184,3 +184,19 @@ def test_sequential_namespace():
     assert dense1.name.startswith('hello.')
     assert dense2.name.startswith('hello.')
     assert dense3.name.startswith('hello.')
+
+
+def test_sequential_enumerate():
+    x = Input(shape=(20,))
+    dense1 = Dense(20)
+    dense2 = Dense(10)
+    dense3 = Dense(1)
+    seq = sequential([
+        dense1,
+        dense2,
+        dense3,
+    ], ns='hello')
+    seq(x)
+    assert dense1.name.endswith('hello.00_dense')
+    assert dense2.name.endswith('hello.01_dense')
+    assert dense3.name.endswith('hello.02_dense')
