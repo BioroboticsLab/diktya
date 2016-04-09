@@ -38,6 +38,22 @@ def test_split():
     assert (output == arr[0:1]).all()
 
 
+def test_split_at():
+    shape = (4, 32)
+    idx_shape = (1,)
+    arr = np.random.sample(shape).astype(np.float32)
+    x = theano.shared(arr)
+    bound = 2
+    idx = theano.shared(np.cast['int32'](bound))
+
+    split_at = SplitAt(axis=0)
+    split_at.build([shape, idx_shape])
+
+    front, back = [o.eval() for o in split_at([idx, x])]
+    assert (front == arr[:bound]).all()
+    assert (back == arr[bound:]).all()
+
+
 def test_linear_in_bounds_clip():
     layer = LinearInBounds(-1, 1, clip=True)
     shape = (1, 1)

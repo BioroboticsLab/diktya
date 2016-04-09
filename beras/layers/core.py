@@ -47,6 +47,34 @@ class Split(Layer):
         return x[tuple(index)]
 
 
+class SplitAt(Layer):
+    def __init__(self, axis=0, **kwargs):
+        super().__init__(**kwargs)
+        self.axis = axis
+        self.input_spec = [InputSpec(dtype='int32'),
+                           InputSpec(dtype=K.floatx())]
+
+    def get_output_shape_for(self, input_shapes):
+        shp = input_shapes[1]
+        new_shp = list(shp)
+        new_shp[self.axis] = None
+        return tuple(new_shp), tuple(new_shp)
+
+    def call(self, xs, mask=None):
+        def build_index(start, stop):
+            index = []
+            for i in range(K.ndim(arr)):
+                if i == self.axis:
+                    index.append(slice(start, stop, 1))
+                else:
+                    index.append(slice(None, None, 1))
+            return index
+        idx, arr = xs
+        front_index = build_index(0, idx)
+        back_index = build_index(idx, None)
+        return arr[tuple(front_index)], arr[tuple(back_index)]
+
+
 class Swap(Layer):
     def __init__(self, a, b, **kwargs):
         self.a = a
