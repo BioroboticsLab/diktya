@@ -204,3 +204,19 @@ def _meshgrid(height, width):
     return grid
 
 
+def zip_visualise_tiles(*arrs, show=True):
+    import matplotlib.pyplot as plt
+    assert len(arrs) >= 2
+    length = len(arrs[0])
+    for a in arrs:
+        assert len(a) == length, "all input arrays must have the same size"
+    tiles = []
+    for i in range(length):
+        for a in arrs:
+            tiles.append(a[i])
+
+    tiled = tile(tiles, columns_must_be_multiple_of=len(arrs))
+    assert len(tiled) == 1, "currently only grayscale image are supported"
+    plt.imshow(tiled[0], cmap='gray')
+    if show:
+        plt.show()
