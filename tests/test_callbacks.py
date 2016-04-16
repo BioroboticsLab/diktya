@@ -16,7 +16,7 @@
 import numpy as np
 
 from beras.callbacks import SaveModels, LearningRateScheduler, \
-    AutomaticLearningRateScheduler
+    AutomaticLearningRateScheduler, HistoryPerBatch
 from keras.models import Sequential
 from keras.layers.core import Dense
 from keras.optimizers import Adam
