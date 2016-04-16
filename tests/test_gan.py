@@ -17,11 +17,10 @@ from conftest import visual_debug, TEST_OUTPUT_DIR
 import os
 import keras
 import theano
-from dotmap import DotMap
 import keras.initializations
 from keras.layers.convolutional import Convolution2D
 from keras.layers.core import Dense, Flatten
-from keras.engine.topology import Input, merge, Container
+from keras.engine.topology import Input, merge
 from keras.models import Sequential
 import math
 import pytest
@@ -156,27 +155,6 @@ def test_gan_graph():
     gan.build('adam', 'adam', gan_binary_crossentropy)
     gan.compile()
     gan.generate({'gen_cond': np.zeros((64,) + z_shape)}, nb_samples=64)
-
-
-def test_gan_l2_regularizer():
-    reg = GAN.L2Regularizer()
-    assert reg.l2_coef.get_value() == 0.
-    g_loss = theano.shared(np.cast['float32'](reg.high + 2))
-    d_loss = theano.shared(np.cast['float32'](0.))
-    gan = DotMap()
-    nodes = DotMap()
-    nodes.layer.trainable_weights = [theano.shared(np.cast['float32'](1.))]
-    gan.get_discriminator_nodes = lambda: nodes
-    gan.updates = []
-    reg.set_gan(gan)
-    reg_g_loss, reg_d_loss = reg(g_loss, d_loss)
-    fn = theano.function([], [reg_g_loss, reg_d_loss], updates=gan.updates)
-    fn()
-    assert reg.l2_coef.get_value() > 0.
-    g_loss.set_value(np.cast['float32'](reg.low - 0.1))
-    fn()
-    fn()
-    assert reg.l2_coef.get_value() == 0.
 
 
 def test_gan_stop_regularizer():
