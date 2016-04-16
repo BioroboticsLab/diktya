@@ -19,7 +19,8 @@ from beras.util import add_border_reflect, collect_layers, sequential, concat
 import matplotlib.pyplot as plt
 from conftest import plt_save_and_maybe_show
 from keras.layers.core import Dense
-from keras.engine.topology import Input, merge, Layer
+from keras.engine.topology import Input, merge
+from keras.engine.training import collect_trainable_weights
 from keras.models import Model
 import pytest
 
@@ -165,9 +166,9 @@ def test_sequential_trainable():
         dense3,
     ], trainable=False)
     seq(x)
-    assert dense1.trainable_weights == []
-    assert dense2.trainable_weights == []
-    assert dense3.trainable_weights == []
+    assert collect_trainable_weights(dense1) == []
+    assert collect_trainable_weights(dense2) == []
+    assert collect_trainable_weights(dense3) == []
 
 
 def test_sequential_namespace():
