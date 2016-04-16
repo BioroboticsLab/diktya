@@ -99,7 +99,8 @@ def sequential_to_gan(generator: Sequential, discriminator: Sequential,
 
     def discriminator_fn(inputs):
         fake, real = inputs
-        dis_in = merge([fake, real], concat_axis=0, mode='concat')
+        dis_in = merge([fake, real], concat_axis=0, mode='concat',
+                       name='concat_fake_real')
         dis = discriminator(dis_in)
         dis_outputs = gan_outputs(dis, fake_for_gen=(0, nb_fake),
                                   fake_for_dis=(nb_fake - nb_real, nb_real),
@@ -200,28 +201,29 @@ class GAN(AbstractModel):
         return self.gen_layers + self.dis_layers
 
     def debug_dict(self):
+        def get_outputs(layers, loss):
+            names_with_outputs = []
+            for l in layers:
+                outs = l.output
+                if type(outs) != list:
+                    outs = [outs]
+                for i, o in enumerate(outs):
+                    if len(outs) > 1:
+                        name = "{}_{}_grad".format(l.name, i)
+                    else:
+                        name = '{}_grad'.format(l.name)
+                    names_with_outputs.append((name, o))
+            out_dict = OrderedDict(names_with_outputs)
+            return list(zip(out_dict.keys(),
+                            T.grad(loss, list(out_dict.values()),
+                                   disconnected_inputs='warn')))
+
         self._ensure_build()
 
         outs = OrderedDict([(l.name, l.output) for l in self.layers])
-
-        outs.update([('{}_grad'.format(l.name), g) for l, g in
-                     zip(self.gen_layers,
-                         T.grad(self.g_loss,
-                                [l.output for l in self.gen_layers],
-                                disconnected_inputs='warn'))])
-
-        outs.update([('{}_grad'.format(l.name), g) for l, g in
-                     zip(self.dis_layers,
-                         T.grad(self.d_loss,
-                                [l.output for l in self.dis_layers],
-                                disconnected_inputs='warn'))])
+        outs.update(get_outputs(self.gen_layers, self.g_loss))
+        outs.update(get_outputs(self.dis_layers, self.g_loss))
         return outs
-
-    def _set_loss_metrics(self, g_loss, d_loss, d_loss_gen, d_loss_real):
-        self.metrics['g_loss'] = g_loss
-        self.metrics['d_loss'] = d_loss
-        self.metrics['d_loss_gen'] = d_loss_gen
-        self.metrics['d_loss_real'] = d_loss_real
 
     def _gather_list_attr(self, layers, attr):
         all_attrs = []
@@ -245,13 +247,13 @@ class GAN(AbstractModel):
             layers = set(layers) - set(self.non_trainable_layers)
             optimizer = keras.optimizers.get(optimizer)
             for r in self._gather_list_attr(layers, 'regularizers'):
-                loss += r(loss)
+                loss = r(loss)
             updates = optimizer.get_updates(
                 trainable_weights(layers),
                 self._gather_list_attr(layers, 'trainable_weights'),
                 self._gather_dict_attr(layers, 'constraints'),
                 loss)
-            return updates + self._gather_list_attr(layers, 'updates')
+            return updates + self._gather_list_attr(layers, 'updates'), loss
 
         d_outs = self.dis_outs
         d_out_given_fake_gen = d_outs[self.dis_out_given_fake_for_gen_idx]
@@ -265,15 +267,24 @@ class GAN(AbstractModel):
         for r in self._gan_regularizers:
             g_loss, d_loss = r(g_loss, d_loss)
 
-        self._set_loss_metrics(g_loss, d_loss, *losses[2:])
+        self.metrics['g_loss'] = g_loss
+        self.metrics['d_loss'] = d_loss
 
-        g_updates = get_updates(g_optimizer, self.gen_layers, g_loss)
-        d_updates = get_updates(d_optimizer, self.dis_layers, d_loss)
+        g_updates, g_loss_with_reg = get_updates(
+            g_optimizer, self.gen_layers, g_loss)
+        d_updates, d_loss_with_reg = get_updates(
+            d_optimizer, self.dis_layers, d_loss)
+
+        self.metrics['g_reg'] = g_loss_with_reg - g_loss
 
         self.g_updates = g_updates
         self.d_updates = d_updates
         self.g_loss = g_loss
         self.d_loss = d_loss
+
+        self.g_loss_with_reg = g_loss_with_reg
+        self.d_loss_with_reg = d_loss_with_reg
+
         self._is_built = True
 
     def _ensure_build(self):
@@ -296,11 +307,23 @@ class GAN(AbstractModel):
             self.gen_inputs + [K.learning_phase()],
             self.fake)
 
-    def compile_debug(self):
+    def compile_debug(self, keys, gradients=False):
         assert self._is_built, \
             "Did you forget to call `build()`, before `compile_debug`?"
+
+        debug_dict = self.debug_dict()
+        selected_dict = []
+        for k in keys:
+            assert any([name.startswith(k) for name in debug_dict.keys()]), \
+                "There exists no layer that startswith: {}".format(k)
+        for name, tensor in debug_dict.items():
+            if any((name.startswith(k) for k in keys)):
+                if gradients or not name.endswith("_grad"):
+                    selected_dict.append((name, tensor))
+        selected_dict = OrderedDict(selected_dict)
+        self.debug_keys = list(selected_dict.keys())
         self._debug = K.function(
-            self.inputs, list(self.debug_dict().values()))
+            self.inputs, list(selected_dict.values()))
 
     def add_gan_regularizer(self, r):
         r.set_gan(self)
@@ -379,7 +402,7 @@ class GAN(AbstractModel):
         inputs['keras_learning_phase'] = int(train)
         ins = [inputs[n] for n in self.input_order]
         outs = self._debug(ins)
-        return dict(zip(self.debug_dict().keys(), outs))
+        return dict(zip(self.debug_keys, outs))
 
     def interpolate(self, x, y, nb_steps=100):
         assert x.shape == y.shape == self.z_shape[1:]
