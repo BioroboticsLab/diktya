@@ -148,38 +148,6 @@ class GAN(AbstractModel):
                             d_loss)
             return g_loss, d_loss
 
-    class L2Regularizer(Regularizer):
-        def __init__(self, low=0.9, high=1.2, delta_value=5e-5, l2_init=0):
-            self.l2_coef = theano.shared(
-                np.cast['float32'](l2_init), name="l2_rate")
-            self.low = low
-            self.high = high
-            self.delta = theano.shared(np.cast['float32'](delta_value),
-                                       name="l2_rate")
-
-        def _apply_l2_regulizer(self, params, loss):
-            l2_loss = T.zeros_like(loss)
-            for p in params:
-                l2_loss += T.sum(p ** 2) * self.l2_coef
-            return loss + l2_loss
-
-        def __call__(self, g_loss, d_loss):
-            small_delta = np.cast['float32'](1e-7)
-            delta_l2 = ifelse(g_loss > self.high,
-                              self.delta,
-                              ifelse(g_loss < self.low,
-                                     -self.delta,
-                                     -small_delta))
-
-            new_l2 = T.maximum(self.l2_coef + delta_l2, 0.)
-            updates = [(self.l2_coef, new_l2)]
-            self.gan.updates += updates
-            params = flatten(
-                [n.trainable_weights
-                 for n in self.gan.get_discriminator_nodes().values()])
-            d_loss = self._apply_l2_regulizer(params, d_loss)
-            return g_loss, d_loss
-
     def __init__(self, generator: '(inputs) -> Container',
                  discriminator: '(inputs) -> Container',
                  z_shape, real_shape, gen_additional_inputs=[],
