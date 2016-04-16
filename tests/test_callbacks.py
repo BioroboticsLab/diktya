@@ -100,3 +100,29 @@ def test_automatic_lr_scheduler():
     print(lr_scheduler.current_best)
     print(lr_scheduler.current_best_epoch)
     assert np.allclose(K.get_value(optimizer.lr), 0.1 * lr_scheduler.factor)
+
+
+def test_history_per_batch():
+    hist = HistoryPerBatch()
+    hist.on_epoch_start(0)
+    losses = [[]]
+    for i in range(5):
+        loss = float(np.random.sample(1))
+        hist.on_batch_end(i, logs={'loss': loss})
+        losses[-1].append(loss)
+
+    losses.append([])
+    hist.on_epoch_start(1)
+    for i in range(5):
+        loss = float(np.random.sample(1))
+        hist.on_batch_end(i, logs={'loss': loss})
+        losses[-1].append(loss)
+
+    losses.append([])
+    hist.on_epoch_start(1)
+    for i in range(5):
+        loss = float(np.random.sample(1))
+        hist.on_batch_end(i, logs={'loss': loss})
+        losses[-1].append(loss)
+
+    assert hist.history['loss'] == losses

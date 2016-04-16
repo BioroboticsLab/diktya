@@ -133,3 +133,18 @@ class AutomaticLearningRateScheduler(Callback):
             print()
             print("Reduce learning rate to: {:08f}".format(new_lr))
             self.current_best_epoch = epoch
+
+
+class HistoryPerBatch(Callback):
+    def __init__(self):
+        self.history = {}
+
+    def on_epoch_start(self, epoch, logs=None):
+        for k in self.history.keys():
+            self.history[k].append([])
+
+    def on_batch_end(self, batch, logs={}):
+        for k, v in logs.items():
+            if k not in self.history:
+                self.history[k] = [[]]
+            self.history[k][-1].append(v)
