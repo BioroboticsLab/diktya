@@ -250,7 +250,6 @@ class GAN(AbstractModel):
                 loss = r(loss)
             updates = optimizer.get_updates(
                 trainable_weights(layers),
-                self._gather_list_attr(layers, 'trainable_weights'),
                 self._gather_dict_attr(layers, 'constraints'),
                 loss)
             return updates + self._gather_list_attr(layers, 'updates'), loss
