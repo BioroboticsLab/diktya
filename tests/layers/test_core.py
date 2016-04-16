@@ -11,10 +11,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from beras.layers.core import Swap, Split, LinearInBounds
+from beras.layers.core import Swap, Split, SplitAt, LinearInBounds
 import numpy as np
 import theano
-from keras.models import Sequential
+from keras.models import Sequential, Model
+from keras.engine.topology import Input
+
 
 def test_swap():
     layer = Swap(0, 10)

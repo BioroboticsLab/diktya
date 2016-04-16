@@ -58,7 +58,10 @@ class SplitAt(Layer):
         shp = input_shapes[1]
         new_shp = list(shp)
         new_shp[self.axis] = None
-        return tuple(new_shp), tuple(new_shp)
+        return [tuple(new_shp), tuple(new_shp)]
+
+    def compute_mask(self, x, masks=None):
+        return [None, None]
 
     def call(self, xs, mask=None):
         def build_index(start, stop):
@@ -70,9 +73,10 @@ class SplitAt(Layer):
                     index.append(slice(None, None, 1))
             return index
         idx, arr = xs
+        idx = idx.flatten()[0]
         front_index = build_index(0, idx)
         back_index = build_index(idx, None)
-        return arr[tuple(front_index)], arr[tuple(back_index)]
+        return [arr[tuple(front_index)], arr[tuple(back_index)]]
 
 
 class Swap(Layer):
@@ -86,6 +90,18 @@ class Swap(Layer):
         x = T.set_subtensor(x[:, self.a], x[:, self.b])
         x = T.set_subtensor(x[:, self.b], tmp)
         return x
+
+
+class Switch(Layer):
+    def get_output_shape_for(self, input_shape):
+        assert len(input_shape) == 3
+        assert input_shape[1] == input_shape[2]
+        return input_shape[1]
+
+    def call(self, x, mask=None):
+        condition, then_expr, else_expr = x
+        pattern = (0, 1) + ('x',) * (K.ndim(then_expr) - 2)
+        return K.switch(condition.dimshuffle(*pattern), then_expr, else_expr)
 
 
 class ZeroGradient(Layer):
