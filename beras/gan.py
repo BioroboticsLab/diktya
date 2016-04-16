@@ -26,7 +26,7 @@ from keras.optimizers import Optimizer
 from keras.callbacks import Callback
 from keras.engine.topology import Input, merge
 from beras.models import AbstractModel
-from beras.util import collect_layers
+from beras.util import collect_layers, trainable_weights
 
 
 def flatten(listOfLists):
@@ -247,6 +247,7 @@ class GAN(AbstractModel):
             for r in self._gather_list_attr(layers, 'regularizers'):
                 loss += r(loss)
             updates = optimizer.get_updates(
+                trainable_weights(layers),
                 self._gather_list_attr(layers, 'trainable_weights'),
                 self._gather_dict_attr(layers, 'constraints'),
                 loss)

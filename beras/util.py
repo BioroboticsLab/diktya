@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from keras.engine.topology import merge, InputLayer
+from keras.engine.training import collect_trainable_weights
 import theano.tensor as T
 import copy
 import re
@@ -329,3 +330,11 @@ def save_weights(layers, filepath, overwrite=False):
             param_dset[:] = val
     f.flush()
     f.close()
+
+
+def trainable_weights(layers):
+    weights = []
+    for layer in layers:
+        weights += collect_trainable_weights(layer)
+    return weights
+
