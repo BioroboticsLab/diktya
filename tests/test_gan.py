@@ -27,6 +27,7 @@ import pytest
 
 from beras.gan import GAN, sequential_to_gan, gan_binary_crossentropy, \
     gan_outputs
+from beras.util import load_weights
 import numpy as np
 
 
@@ -155,6 +156,53 @@ def test_gan_graph():
     gan.build('adam', 'adam', gan_binary_crossentropy)
     gan.compile()
     gan.generate({'gen_cond': np.zeros((64,) + z_shape)}, nb_samples=64)
+
+
+def test_gan_save_weights(tmpdir):
+    z_shape = (1, 8, 8)
+    gen_cond = Input(shape=(1, 8, 8), name='gen_cond')
+
+    def generator(inputs):
+        gen_input = merge(inputs, mode='concat', concat_axis=1)
+        return Convolution2D(10, 2, 2, activation='relu',
+                             border_mode='same')(gen_input)
+
+    def discriminator(inputs):
+        dis_input = merge(inputs, mode='concat', concat_axis=1)
+        dis_conv = Convolution2D(5, 2, 2, activation='relu')(dis_input)
+        dis_flatten = Flatten()(dis_conv)
+        dis = Dense(1, activation='sigmoid')(dis_flatten)
+        return gan_outputs(dis)
+
+    gan = GAN(generator, discriminator, z_shape=z_shape, real_shape=z_shape,
+              gen_additional_inputs=[gen_cond])
+    gan.save_weights(str(tmpdir + "/{}.hdf5"))
+
+    gan_load = GAN(generator, discriminator, z_shape=z_shape,
+                   real_shape=z_shape, gen_additional_inputs=[gen_cond])
+
+    all_equal = True
+    for s, l in zip(gan.layers, gan_load.layers):
+        if not all([
+            (sw.get_value() == lw.get_value()).all()
+            for sw, lw in zip(s.trainable_weights, l.trainable_weights)
+        ]):
+            all_equal = False
+    assert not all_equal
+
+    load_weights(gan_load.gen_layers, str(tmpdir + "/generator.hdf5"),
+                 nb_input_layers=0)
+
+    for s, l in zip(gan.gen_layers, gan_load.gen_layers):
+        for sw, lw in zip(s.trainable_weights, l.trainable_weights):
+            assert (sw.get_value() == lw.get_value()).all()
+
+    load_weights(gan_load.layers, str(tmpdir + "/gan.hdf5"),
+                 nb_input_layers=0)
+
+    for s, l in zip(gan.layers, gan_load.layers):
+        for sw, lw in zip(s.trainable_weights, l.trainable_weights):
+            assert (sw.get_value() == lw.get_value()).all()
 
 
 def test_gan_stop_regularizer():

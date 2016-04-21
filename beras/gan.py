@@ -24,9 +24,10 @@ from keras.models import Sequential
 import keras.optimizers
 from keras.optimizers import Optimizer
 from keras.callbacks import Callback
-from keras.engine.topology import Input, merge
+from keras.engine.topology import Input, merge, Container
 from beras.models import AbstractModel
-from beras.util import collect_layers, trainable_weights
+from beras.util import collect_layers, trainable_weights, save_weights, \
+    load_weights
 
 
 def flatten(listOfLists):
@@ -428,3 +429,8 @@ class GAN(AbstractModel):
             z[i] = np.clip(z_point + offset, -1, 1)
 
         return self.generate({'z': z})
+
+    def save_weights(self, fname, overwrite=False):
+        save_weights(self.gen_layers, fname.format("generator"), overwrite)
+        save_weights(self.gen_layers, fname.format("discriminator"), overwrite)
+        save_weights(self.layers, fname.format("gan"), overwrite)
