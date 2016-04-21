@@ -313,7 +313,7 @@ def save_weights(layers, filepath, overwrite=False):
 
     for layer in layers:
         g = f.create_group(layer.name)
-        symbolic_weights = layer._trainable_weights + \
+        symbolic_weights = layer.trainable_weights + \
             layer.non_trainable_weights
         weight_values = layer.get_weights()
         weight_names = []
