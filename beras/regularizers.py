@@ -18,9 +18,10 @@ import keras.backend as K
 
 
 class ActivityInBoundsRegularizer(Regularizer):
-    def __init__(self, low=-1, high=1):
+    def __init__(self, low=-1, high=1, weight=10):
         self.low = low
         self.high = high
+        self.weight = weight
         self.uses_learning_phase = True
 
     def __call__(self, loss):
@@ -32,7 +33,7 @@ class ActivityInBoundsRegularizer(Regularizer):
         activation = self.layer.input
         l = K.switch(activation < self.low, K.abs(activation - self.low), 0)
         h = K.switch(activation > self.high, K.abs(activation - self.high), 0)
-        return K.in_train_phase(loss + K.sum(h + l), loss)
+        return K.in_train_phase(loss + self.weight*K.mean(h + l), loss)
 
     def get_config(self):
         return {
