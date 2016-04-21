@@ -432,5 +432,5 @@ class GAN(AbstractModel):
 
     def save_weights(self, fname, overwrite=False):
         save_weights(self.gen_layers, fname.format("generator"), overwrite)
-        save_weights(self.gen_layers, fname.format("discriminator"), overwrite)
+        save_weights(self.dis_layers, fname.format("discriminator"), overwrite)
         save_weights(self.layers, fname.format("gan"), overwrite)
