@@ -255,6 +255,62 @@ def collect_layers(inputs, outputs):
     return layers
 
 
+def from_config(config, inputs={}):
+    '''Instantiates a Model from its config (output of `get_config()`).
+
+    TODO: support for custom objects
+    '''
+    from keras.utils.layer_utils import layer_from_config
+
+    # layer instances created during
+    # the graph reconstruction process
+    created_layers = {n: t._keras_history[0] for n, t in inputs.items()}
+
+    # iterate over saved layers, instantiate them,
+    # then call them on appropriate inputs to create graph nodes
+    for layer_data in config['layers']:
+        layer_name = layer_data['name']
+        if layer_name in inputs:
+            continue
+
+        # instantiate layer
+        layer = layer_from_config(layer_data)
+        created_layers[layer_name] = layer
+
+        # gather layer inputs
+        inbound_nodes_data = layer_data['inbound_nodes']
+        for node_data in inbound_nodes_data:
+            input_tensors = []
+            for input_data in node_data:
+                inbound_layer_name, inbound_node_index, inbound_tensor_index = input_data
+                assert inbound_layer_name in created_layers, 'Missing layer: %s' % inbound_layer_name
+                inbound_layer = created_layers[inbound_layer_name]
+                inbound_node = inbound_layer.inbound_nodes[inbound_node_index]
+                input_tensors.append(inbound_node.output_tensors[inbound_tensor_index])
+            # call layer on its inputs, thus creating the node
+            # and building the layer if needed
+            if input_tensors:
+                if len(input_tensors) == 1:
+                    layer(input_tensors[0])
+                else:
+                    layer(input_tensors)
+    input_tensors = []
+    output_tensors = []
+    for layer_data in config['input_layers']:
+        layer_name, node_index, tensor_index = layer_data
+        assert layer_name in created_layers
+        layer = created_layers[layer_name]
+        layer_output_tensors = layer.inbound_nodes[node_index].output_tensors
+        input_tensors.append(layer_output_tensors[tensor_index])
+    for layer_data in config['output_layers']:
+        layer_name, node_index, tensor_index = layer_data
+        assert layer_name in created_layers
+        layer = created_layers[layer_name]
+        layer_output_tensors = layer.inbound_nodes[node_index].output_tensors
+        output_tensors.append(layer_output_tensors[tensor_index])
+    return input_tensors, output_tensors
+
+
 def load_weights(layers, filepath, nb_input_layers=1):
     '''Load all layer weights from a HDF5 save file. '''
     import h5py
