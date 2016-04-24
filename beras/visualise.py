@@ -13,6 +13,9 @@
 # limitations under the License.
 
 from beras.transform import tile
+import numpy as np
+import matplotlib.pyplot as plt
+import multiprocessing
 
 
 def zip_visualise_tiles(*arrs, show=True):
@@ -33,8 +36,31 @@ def zip_visualise_tiles(*arrs, show=True):
         plt.show()
 
 
-def visualise_tiles(images):
+def visualise_tiles(images, show=True):
     import matplotlib.pyplot as plt
     tiled_fakes = tile(images)
     plt.imshow(tiled_fakes[0], cmap='gray')
-    plt.show()
+    if show:
+        plt.show()
+
+
+def _save_image_worker(data, fname, cmap):
+    # matplotlib seems to leak memory. Quite a hack
+    sizes = np.shape(data)
+    height = float(sizes[0])
+    width = float(sizes[1])
+    fig = plt.figure()
+    fig.set_size_inches(width/height, 1, forward=False)
+    ax = plt.Axes(fig, [0., 0., 1., 1.])
+    ax.set_axis_off()
+    fig.add_axes(ax)
+    ax.imshow(data, cmap=cmap)
+    plt.savefig(fname, dpi=height)
+    plt.close(fig)
+
+
+def save_image(data, fname, cmap='gray'):
+    proc = multiprocessing.Process(target=_save_image_worker,
+                                   args=(data, fname, cmap))
+    proc.daemon = True
+    proc.start()
