@@ -202,3 +202,8 @@ def _meshgrid(height, width):
     ones = T.ones_like(x_t_flat)
     grid = T.concatenate([x_t_flat, y_t_flat, ones], axis=0)
     return grid
+
+
+def scipy_gaussian_filter_2d(x, sigma):
+    from scipy.ndimage.filters import gaussian_filter1d
+    return gaussian_filter1d(gaussian_filter1d(x, 2/3, axis=-1), 2/3, axis=-2)
