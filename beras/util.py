@@ -22,8 +22,6 @@ import re
 def add_border(input, border, mode='repeat'):
     if mode == 'repeat':
         return add_border_repeat(input, border), 'valid'
-    elif mode == 'reflect':
-        return add_border_reflect(input, border), 'valid'
     elif mode == 'zero':
         if hasattr(border, 'eval'):
             border = int(border.eval())
@@ -52,38 +50,6 @@ def add_border_repeat(input, border):
     padded = T.concatenate([h_start_padding, w_padded,
                             h_end_padding], axis=2)
     return padded
-
-
-def add_border_reflect(input, border):
-    """Reflects the border like OpenCV BORDER_REFLECT_101. See here
-    http://docs.opencv.org/2.4/modules/imgproc/doc/filtering.html"""
-
-    b = border
-    shp = input.shape
-    wb = T.zeros((shp[0], shp[1], shp[2]+2*b, shp[3]+2*b))
-    wb = T.set_subtensor(wb[:, :, b:shp[2]+b, b:shp[3]+b], input)
-
-    top = input[:, :, 1:b+1, :]
-    wb = T.set_subtensor(wb[:, :, :b, b:shp[3]+b], top[:, :, ::-1, :])
-
-    bottom = input[:, :, -b-1:-1, :]
-    wb = T.set_subtensor(wb[:, :, -b:, b:shp[3]+b], bottom[:, :, ::-1, :])
-
-    left = input[:, :, :, 1:b+1]
-    wb = T.set_subtensor(wb[:, :, b:shp[2]+b, :b], left[:, :, :, ::-1])
-
-    right = input[:, :, :, -b-1:-1]
-    wb = T.set_subtensor(wb[:, :, b:shp[2]+b, -b:], right[:, :, :, ::-1])
-
-    left_top = input[:, :, 1:b+1, 1:b+1]
-    wb = T.set_subtensor(wb[:, :, :b, :b], left_top[:, :, ::-1, ::-1])
-    left_bottom = input[:, :, -b-1:-1, 1:b+1]
-    wb = T.set_subtensor(wb[:, :, -b:, :b], left_bottom[:, :, ::-1, ::-1])
-    right_bottom = input[:, :, 1:b+1, -b-1:-1]
-    wb = T.set_subtensor(wb[:, :, :b, -b:], right_bottom[:, :, ::-1, ::-1])
-    right_top = input[:, :, -b-1:-1, -b-1:-1]
-    wb = T.set_subtensor(wb[:, :, -b:, -b:], right_top[:, :, ::-1, ::-1])
-    return wb
 
 
 def sequential(layers, ns=None, trainable=True):

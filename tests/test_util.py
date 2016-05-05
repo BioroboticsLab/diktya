@@ -27,37 +27,6 @@ from keras.models import Model
 import pytest
 
 
-def test_add_border_reflect():
-    filter_radius = 3
-    r = filter_radius
-    x = theano.shared(np.random.sample((3, 1, 64, 64)))
-    x_with_border = add_border_reflect(x, filter_radius).eval()
-    v = x.get_value()
-    top = v[:, :, 1:r+1, :]
-
-    plt.subplot(121)
-    plt.imshow(x.get_value()[2, 0, :])
-    plt.subplot(122)
-    plt.imshow(x_with_border[2, 0, :])
-    plt_save_and_maybe_show("add_border_reflect.png")
-
-    np.testing.assert_allclose(
-        x_with_border[:, :, r:r+64, r:r+64], v)
-    np.testing.assert_allclose(x_with_border[:, :, :r, r:r+64],
-                               top[:, :, ::-1, :])
-
-
-def test_benchmark_add_border():
-    filter_size = 7
-    # x = T.tensor4()
-    x = theano.shared(np.random.sample((128, 1, 64, 64)))
-    x_with_border = add_border_reflect(x, filter_size)
-    add_border = theano.function([], [x_with_border])
-    t = Timer(lambda: add_border())
-    n = 500
-    print("add_border took: {:.4f}ms".format(1000 * t.timeit(number=n) / n))
-
-
 def test_collect_layers():
     input = Input(shape=(5,))
     layer_a = Dense(20)
