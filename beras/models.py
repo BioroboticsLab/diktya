@@ -141,23 +141,7 @@ class AbstractModel(object):
         return outs
 
     def get_config(self, verbose=0):
-        config = super(AbstractModel, self).get_config()
-        for p in ['class_mode', 'theano_mode']:
-            if hasattr(self, p):
-                config[p] = getattr(self, p)
-        if hasattr(self, 'optimizer'):
-            config['optimizer'] = self.optimizer.get_config()
-        if hasattr(self, 'loss'):
-            if type(self.loss) == dict:
-                config['loss'] = dict([(k, v.__name__)
-                                       for k, v in self.loss.items()])
-            else:
-                config['loss'] = self.loss.__name__
-
-        if verbose:
-            pp = pprint.PrettyPrinter(indent=4)
-            pp.pprint(config)
-        return config
+        raise NotImplemented()
 
     def to_yaml(self):
         # dump model configuration to yaml string

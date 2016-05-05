@@ -78,7 +78,6 @@ def test_gaussian_filter_2d(astronaut):
 
         plt_save_and_maybe_show("test_gaussian_blur_2d_{}.png".format(mode))
 
-    test_border_mode('reflect', 'mirror')
     test_border_mode('zero', 'constant')
 
 
@@ -94,14 +93,14 @@ def test_gaussian_filter_2d_variable_sigma(astronaut):
     sigmas = np.array([3, 1, 2, 0.5], dtype=np.float32)
     sigmas_shared = theano.shared(sigmas)
     theano_blur = gaussian_filter_2d_variable_sigma(img, sigmas_shared,
-                                                    border_mode='reflect')
+                                                    border_mode='zero')
     blur = theano_blur.eval()
     assert blur.shape == (bs, 1, 64, 64)
     blur = blur.reshape(bs, 64, 64)
     r, c = 4, 2
     for i, (sigma, astro) in enumerate(zip(sigmas, astronaut_stacked)):
         expected = skimage.filters.gaussian_filter(astro,
-                                                   float(sigma), mode='mirror')
+                                                   float(sigma), mode='constant')
 
         np.testing.assert_allclose(blur[i], expected, rtol=0.01, atol=0.02)
 

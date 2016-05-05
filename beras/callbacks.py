@@ -45,21 +45,22 @@ class VisualiseGAN(Callback):
         z_shape = (self.nb_samples, ) + z_shape[1:]
         self.z = np.random.uniform(-1, 1, z_shape)
 
-    def __call__(self):
+    def __call__(self, fname=None):
         fake = self.model.generate({'z': self.z})
         fake = self.preprocess(fake)
         tiled_fakes = tile(fake)
         plt.imshow(tiled_fakes[0], cmap='gray')
         plt.grid(False)
+        if fname is not None:
+            plt.savefig(fname, dpi=200)
         if self.show:
             plt.show()
 
     def on_epoch_end(self, epoch, logs={}):
-        epoch = epoch + 1
+        epoch = epoch
         if self.should_visualise(epoch):
-            self()
             fname = os.path.join(self.output_dir, "{:05d}.png".format(epoch))
-            plt.savefig(fname, dpi=200)
+            self(fname)
             plt.clf()
 
 
@@ -75,8 +76,8 @@ class SaveModels(Callback):
         self.output_dir = output_dir
 
     def on_epoch_end(self, epoch, log={}):
-        epoch = epoch + 1
-        if epoch % self.every_epoch == 0:
+        epoch = epoch
+        if epoch % self.every_epoch == 0 and epoch != 0:
             for name, model in self.models.items():
                 fname = name.format(epoch=epoch)
                 if self.output_dir is not None:
@@ -91,7 +92,7 @@ class LearningRateScheduler(Callback):
         self.schedule = schedule
 
     def on_epoch_end(self, epoch, logs={}):
-        epoch = epoch+1
+        epoch = epoch
         if epoch in self.schedule:
             K.set_value(self.optimizer.lr, self.schedule[epoch])
 

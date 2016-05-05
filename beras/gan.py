@@ -25,9 +25,11 @@ import keras.optimizers
 from keras.optimizers import Optimizer
 from keras.callbacks import Callback
 from keras.engine.topology import Input, merge, Container
+from keras.utils.layer_utils import layer_from_config
+
 from beras.models import AbstractModel
-from beras.util import collect_layers, trainable_weights, save_weights, \
-    load_weights
+from beras.util import collect_layers, trainable_weights, \
+    rename_layer
 
 
 def flatten(listOfLists):
@@ -94,20 +96,19 @@ def gan_linear_losses(d_out_given_fake_for_gen,
 
 def sequential_to_gan(generator: Sequential, discriminator: Sequential,
                       nb_real=32, nb_fake=96):
-    def generator_fn(inputs):
-        z, = inputs
-        return generator(z)
+    generator
 
-    def discriminator_fn(inputs):
-        fake, real = inputs
-        dis_in = merge([fake, real], concat_axis=0, mode='concat',
-                       name='concat_fake_real')
-        dis = discriminator(dis_in)
-        dis_outputs = gan_outputs(dis, fake_for_gen=(0, nb_fake),
-                                  fake_for_dis=(nb_fake - nb_real, nb_real),
-                                  real=(nb_fake, nb_fake + nb_real))
-        return dis_outputs
-    return GAN(generator_fn, discriminator_fn,
+    fake = Input(shape=discriminator.input_shape[1:], name='fake')
+    real = Input(shape=discriminator.input_shape[1:], name='real')
+
+    dis_in = merge([fake, real], concat_axis=0, mode='concat',
+                   name='concat_fake_real')
+    dis = discriminator(dis_in)
+    dis_outputs = gan_outputs(dis, fake_for_gen=(0, nb_fake),
+                              fake_for_dis=(nb_fake - nb_real, nb_real),
+                              real=(nb_fake, nb_fake + nb_real))
+    dis_container = Container([fake, real], dis_outputs)
+    return GAN(generator, dis_container,
                z_shape=generator.input_shape[1:],
                real_shape=discriminator.input_shape[1:])
 
@@ -116,6 +117,7 @@ def gan_outputs(discriminator,
                 fake_for_gen=(0, 64),
                 fake_for_dis=(0, 64),
                 real=(64, 128)):
+    rename_layer(discriminator, 'discriminator')
     return Split(*fake_for_gen)(discriminator), \
         Split(*fake_for_dis)(discriminator), \
         Split(*real)(discriminator)
@@ -150,29 +152,30 @@ class GAN(AbstractModel):
                             d_loss)
             return g_loss, d_loss
 
-    def __init__(self, generator: '(inputs) -> Container',
-                 discriminator: '(inputs) -> Container',
+    def __init__(self, generator: Container,
+                 discriminator: Container,
                  z_shape, real_shape, gen_additional_inputs=[],
                  dis_additional_inputs=[],
-                 non_trainable_layers=set()
                  ):
-        self.generator_func = generator
-        self.discriminator_func = discriminator
+        self.generator = generator
+        self.discriminator = discriminator
 
         self.z_shape = (None,) + z_shape
         self.real_shape = (None,) + real_shape
         self.z = Input(batch_shape=self.z_shape, name='z')
         self.real = Input(batch_shape=self.real_shape, name='real')
 
+        self.gen_additional_inputs = gen_additional_inputs
         self.gen_inputs = [self.z] + gen_additional_inputs
-        self.fake = self.generator_func(self.gen_inputs)
-
+        self.fake = self.generator(self.gen_inputs)
         self.gen_layers = collect_layers(self.gen_inputs, [self.fake])
+
+        self.dis_additional_inputs = dis_additional_inputs
         self.dis_inputs = [self.fake, self.real] + dis_additional_inputs
 
         self._maybe_duplicate_inputs = self.gen_inputs + [self.real] \
             + dis_additional_inputs
-        self.dis_outs = self.discriminator_func(self.dis_inputs)
+        self.dis_outs = self.discriminator(self.dis_inputs)
         assert len(self.dis_outs) == 3, \
             "The discriminator must return 3 tensors"
         self.dis_layers = collect_layers(self.dis_inputs, self.dis_outs)
@@ -180,7 +183,6 @@ class GAN(AbstractModel):
         self.updates = []
         self.metrics = OrderedDict()
         self._is_built = False
-        self.non_trainable_layers = set(non_trainable_layers)
 
     @property
     def inputs(self):
@@ -245,7 +247,7 @@ class GAN(AbstractModel):
         assert not self._is_built
 
         def get_updates(optimizer, layers, loss):
-            layers = set(layers) - set(self.non_trainable_layers)
+            layers = set(layers)
             optimizer = keras.optimizers.get(optimizer)
             for r in self._gather_list_attr(layers, 'regularizers'):
                 loss = r(loss)
@@ -314,12 +316,15 @@ class GAN(AbstractModel):
         debug_dict = self.debug_dict()
         selected_dict = []
         for k in keys:
-            assert any([name.startswith(k) for name in debug_dict.keys()]), \
+            assert any([name == k for name in debug_dict.keys()]), \
                 "There exists no layer that startswith: {}".format(k)
         for name, tensor in debug_dict.items():
-            if any((name.startswith(k) for k in keys)):
-                if gradients or not name.endswith("_grad"):
-                    selected_dict.append((name, tensor))
+            if any((name == k for k in keys)):
+                selected_dict.append((name, tensor))
+                if gradients:
+                    grad_name = name + '_grad'
+                    selected_dict.append((grad_name, debug_dict[grad_name]))
+
         selected_dict = OrderedDict(selected_dict)
         self.debug_keys = list(selected_dict.keys())
         self._debug = K.function(
@@ -431,6 +436,35 @@ class GAN(AbstractModel):
         return self.generate({'z': z})
 
     def save_weights(self, fname, overwrite=False):
-        save_weights(self.gen_layers, fname.format("generator"), overwrite)
-        save_weights(self.dis_layers, fname.format("discriminator"), overwrite)
-        save_weights(self.layers, fname.format("gan"), overwrite)
+        self.generator.save_weights(fname.format("generator"), overwrite)
+        self.discriminator.save_weights(fname.format("discriminator"),
+                                        overwrite)
+
+    def load_weights(self, fname):
+        self.generator.load_weights(fname.format("generator"))
+        self.discriminator.load_weights(fname.format("discriminator"))
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(
+            Container.from_config(config['generator']),
+            Container.from_config(config['discriminator']),
+            config['z_shape'],
+            config['real_shape'],
+        )
+
+    def get_config(self):
+        assert self.gen_additional_inputs == [], \
+            "get_config cannot handle additional inputs"
+        assert self.dis_additional_inputs == [], \
+            "get_config cannot handle additional inputs"
+
+        return {
+            'class_name': 'GAN',
+            'config': {
+                'generator': self.generator.get_config(),
+                'discriminator': self.discriminator.get_config(),
+                'z_shape': self.z_shape[1:],
+                'real_shape': self.real_shape[1:],
+            }
+        }

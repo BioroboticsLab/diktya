@@ -19,31 +19,15 @@ import numpy as np
 import theano
 import theano.tensor as T
 
-from beras.util import add_border_reflect
-from beras.filters import gaussian_filter_2d, np_gaussian_kernel_2d
-import keras.backend as K
+from beras.filters import gaussian_filter_2d
 
 
 def upsample(input, sigma=2/3):
     if type(input) == list:
         assert len(input) == 1
         input = input[0]
-    resized = resize_interpolate(input, scale=0.5)
+    resized = resize_interpolate(input, scale=2)
     return gaussian_filter_2d(resized, sigma)
-
-
-def downsample(input, nb_channels=1):
-    if type(input) == list:
-        assert len(input) == 1
-        input = input[0]
-    assert nb_channels == 1
-
-    filter_shape = (1, 1, 5, 5)
-    np_kernel = np_gaussian_kernel_2d(sigma=2/3, window_radius=2)
-    kernel = T.as_tensor_variable(np_kernel.reshape(filter_shape))
-    input = add_border_reflect(input, border=2)
-    return K.conv2d(input, kernel, strides=(2, 2), filter_shape=filter_shape,
-                    image_shape=(None, 1, None, None))
 
 
 def tile(tiles, columns_must_be_multiple_of=1):
@@ -88,8 +72,8 @@ def resize_interpolate(input, scale):
     # from https://github.com/Lasagne/Lasagne/blob/master/lasagne/layers/special.py
     num_batch, num_channels, height, width = input.shape
 
-    out_height = T.cast(height / scale, 'int64')
-    out_width = T.cast(width / scale, 'int64')
+    out_height = T.cast(height * scale, 'int64')
+    out_width = T.cast(width * scale, 'int64')
     theta = theano.shared(np.array([[[1, 0, 0],
                                      [0, 1, 0]]],
                                    dtype=theano.config.floatX))

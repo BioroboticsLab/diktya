@@ -11,15 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from timeit import Timer
 
-import theano
 import numpy as np
-from beras.util import add_border_reflect, collect_layers, sequential, \
-    concat, from_config
+from beras.util import collect_layers, sequential, concat
 
-import matplotlib.pyplot as plt
-from conftest import plt_save_and_maybe_show
 from keras.layers.core import Dense
 from keras.engine.topology import Input, merge
 from keras.engine.training import collect_trainable_weights
@@ -172,35 +167,3 @@ def test_sequential_enumerate():
     assert dense1.name.endswith('hello.00_dense')
     assert dense2.name.endswith('hello.01_dense')
     assert dense3.name.endswith('hello.02_dense')
-
-
-def test_from_config_model():
-    x = Input(shape=(20,), name='x')
-    seq = sequential([
-        Dense(20),
-        Dense(10),
-        Dense(1),
-    ], ns='hello')
-    model = Model(x, seq(x))
-    config = model.get_config()
-    ins, out = from_config(config)
-    for l in collect_layers(ins, out):
-        assert type(l) == Dense
-
-
-def test_from_config_given_inputs():
-    x = Input(shape=(20,), name='input_x')
-    seq = sequential([
-        Dense(20),
-        Dense(10),
-        Dense(1),
-    ], ns='hello')
-    model = Model(x, seq(x))
-    config = model.get_config()
-    import json
-    print(json.dumps(config, indent=2))
-    y = Input(shape=(20,), name='input_y')
-    ins, out = from_config(config, inputs={'input_x': y})
-    assert ins == [y]
-    for l in collect_layers(y, out):
-        assert type(l) == Dense

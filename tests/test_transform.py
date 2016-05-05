@@ -18,28 +18,16 @@ import skimage
 import skimage.transform
 import theano
 import numpy as np
-from beras.transform import downsample, upsample, tile
+from beras.transform import upsample, tile, resize_interpolate
 import matplotlib.pyplot as plt
 import skimage.data
 import skimage.color
-import skimage.filters
 from conftest import plt_save_and_maybe_show
-
-
-def test_downsample(astronaut):
-    astronaut = skimage.transform.resize(astronaut, (64, 64))
-    x = theano.shared(astronaut.reshape(1, 1, 64, 64))
-    x_small = downsample(x).eval()
-    plt.subplot(121)
-    plt.imshow(x.get_value()[0, 0, :])
-    plt.subplot(122)
-    plt.imshow(x_small[0, 0, :])
-    plt_save_and_maybe_show("test_downsample.png")
 
 
 def test_upsample(astronaut):
     x = theano.shared(astronaut[np.newaxis, np.newaxis])
-    x_up = upsample(downsample(x)).eval()
+    x_up = upsample(resize_interpolate(x, scale=0.5)).eval()
     plt.subplot(121)
     plt.imshow(x.get_value()[0, 0, :])
     plt.subplot(122)

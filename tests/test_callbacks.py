@@ -32,7 +32,7 @@ def test_save_models(tmpdir):
     cb = SaveModels({fname: m}, every_epoch=10)
     cb.on_epoch_end(0)
     assert not os.path.exists(fname)
-    cb.on_epoch_end(9)
+    cb.on_epoch_end(10)
     assert os.path.exists(fname)
 
 
@@ -41,10 +41,10 @@ def test_save_models_overwrite(tmpdir):
     m.add(Dense(3, input_dim=3))
     fname = str(tmpdir) + "/test.hdf5"
     cb = SaveModels({fname: m}, every_epoch=10, overwrite=False)
-    cb.on_epoch_end(9)
+    cb.on_epoch_end(10)
     assert os.path.exists(fname)
     with pytest.raises(OSError):
-        cb.on_epoch_end(9)
+        cb.on_epoch_end(10)
 
 
 def test_save_models_output_dir(tmpdir):
@@ -52,7 +52,7 @@ def test_save_models_output_dir(tmpdir):
     m.add(Dense(3, input_dim=3))
     fname = "test.hdf5"
     cb = SaveModels({fname: m}, output_dir=str(tmpdir), every_epoch=10)
-    cb.on_epoch_end(9)
+    cb.on_epoch_end(10)
     assert os.path.exists(os.path.join(str(tmpdir), fname))
 
 
@@ -62,19 +62,19 @@ def test_lr_scheduler():
     schedule = {20: 0.01, 100: 0.005, 900: 0.0001}
     lr_scheduler = LearningRateScheduler(optimizer, schedule)
 
-    lr_scheduler.on_epoch_end(19)
+    lr_scheduler.on_epoch_end(20)
     assert np.allclose(K.get_value(optimizer.lr), schedule[20])
 
-    lr_scheduler.on_epoch_end(49)
+    lr_scheduler.on_epoch_end(50)
     assert np.allclose(K.get_value(optimizer.lr), schedule[20])
 
-    lr_scheduler.on_epoch_end(99)
+    lr_scheduler.on_epoch_end(100)
     assert np.allclose(K.get_value(optimizer.lr), schedule[100])
 
     lr_scheduler.on_epoch_end(1000)
     assert np.allclose(K.get_value(optimizer.lr), schedule[100])
 
-    lr_scheduler.on_epoch_end(899)
+    lr_scheduler.on_epoch_end(900)
     assert np.allclose(K.get_value(optimizer.lr), schedule[900])
 
     lr_scheduler.on_epoch_end(1000)

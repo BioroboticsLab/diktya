@@ -46,6 +46,16 @@ class Split(Layer):
                 index.append(slice(None, None, 1))
         return x[tuple(index)]
 
+    def get_config(self):
+        config = {
+            'start': self.start,
+            'stop': self.stop,
+            'step': self.step,
+            'axis': self.axis,
+        }
+        base_config = super().get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
 
 class SplitAt(Layer):
     def __init__(self, axis=0, **kwargs):
@@ -78,6 +88,13 @@ class SplitAt(Layer):
         back_index = build_index(idx, None)
         return [arr[tuple(front_index)], arr[tuple(back_index)]]
 
+    def get_config(self):
+        config = {
+            'axis': self.axis,
+        }
+        base_config = super().get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
 
 class Swap(Layer):
     def __init__(self, a, b, **kwargs):
@@ -90,6 +107,14 @@ class Swap(Layer):
         x = T.set_subtensor(x[:, self.a], x[:, self.b])
         x = T.set_subtensor(x[:, self.b], tmp)
         return x
+
+    def get_config(self):
+        config = {
+            'a': self.a,
+            'b': self.b,
+        }
+        base_config = super().get_config()
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 class Switch(Layer):
@@ -128,3 +153,12 @@ class LinearInBounds(Layer):
                           self.activity_in_bounds.high)
         else:
             return x
+
+    def get_config(self):
+        config = {
+            'low': self.low,
+            'high': self.high,
+            'clip': self.clip,
+        }
+        base_config = super().get_config()
+        return dict(list(base_config.items()) + list(config.items()))

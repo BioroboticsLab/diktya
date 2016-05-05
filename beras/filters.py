@@ -18,10 +18,9 @@ from beras.util import add_border
 
 from keras.backend.common import floatx, cast_to_floatx
 import numpy as np
-import keras.backend as K
 
 
-def sobel(img, border_mode='reflect'):
+def sobel(img, border_mode='zero'):
     filter = np.array([
         [1, 0, -1],
         [2, 0, -2],
@@ -30,12 +29,12 @@ def sobel(img, border_mode='reflect'):
     img, conv_border = add_border(img, border=1, mode=border_mode)
     kernel_x = theano.shared(filter[np.newaxis, np.newaxis])
     kernel_y = theano.shared(np.transpose(filter)[np.newaxis, np.newaxis])
-    conv_x = K.conv2d(img, kernel_x, border_mode=conv_border,
-                      image_shape=(None, 1, None, None),
-                      filter_shape=(1, 1, 3, 3))
-    conv_y = K.conv2d(img, kernel_y, border_mode=conv_border,
-                      image_shape=(None, 1, None, None),
-                      filter_shape=(1, 1, 3, 3))
+    conv_x = T.nnet.conv2d(img, kernel_x, border_mode=conv_border,
+                           input_shape=(None, 1, None, None),
+                           filter_shape=(1, 1, 3, 3))
+    conv_y = T.nnet.conv2d(img, kernel_y, border_mode=conv_border,
+                           input_shape=(None, 1, None, None),
+                           filter_shape=(1, 1, 3, 3))
     return conv_x, conv_y
 
 

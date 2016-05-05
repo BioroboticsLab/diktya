@@ -95,6 +95,11 @@ def namespace(namespace, inputs, outputs):
         l.name = namespace + '.' + l.name
 
 
+def rename_layer(keras_tensor, name):
+    layer = keras_tensor._keras_history[0]
+    layer.name = name
+
+
 def collect_layers(inputs, outputs):
     if type(inputs) not in (tuple, list):
         inputs = [inputs]
@@ -219,139 +224,6 @@ def collect_layers(inputs, outputs):
     container_nodes = container_nodes
     nodes_by_depth = nodes_by_depth
     return layers
-
-
-def from_config(config, inputs={}):
-    '''Instantiates a Model from its config (output of `get_config()`).
-
-    TODO: support for custom objects
-    '''
-    from keras.utils.layer_utils import layer_from_config
-
-    # layer instances created during
-    # the graph reconstruction process
-    created_layers = {n: t._keras_history[0] for n, t in inputs.items()}
-
-    # iterate over saved layers, instantiate them,
-    # then call them on appropriate inputs to create graph nodes
-    for layer_data in config['layers']:
-        layer_name = layer_data['name']
-        if layer_name in inputs:
-            continue
-
-        # instantiate layer
-        layer = layer_from_config(layer_data)
-        created_layers[layer_name] = layer
-
-        # gather layer inputs
-        inbound_nodes_data = layer_data['inbound_nodes']
-        for node_data in inbound_nodes_data:
-            input_tensors = []
-            for input_data in node_data:
-                inbound_layer_name, inbound_node_index, inbound_tensor_index = input_data
-                assert inbound_layer_name in created_layers, 'Missing layer: %s' % inbound_layer_name
-                inbound_layer = created_layers[inbound_layer_name]
-                inbound_node = inbound_layer.inbound_nodes[inbound_node_index]
-                input_tensors.append(inbound_node.output_tensors[inbound_tensor_index])
-            # call layer on its inputs, thus creating the node
-            # and building the layer if needed
-            if input_tensors:
-                if len(input_tensors) == 1:
-                    layer(input_tensors[0])
-                else:
-                    layer(input_tensors)
-    input_tensors = []
-    output_tensors = []
-    for layer_data in config['input_layers']:
-        layer_name, node_index, tensor_index = layer_data
-        assert layer_name in created_layers
-        layer = created_layers[layer_name]
-        layer_output_tensors = layer.inbound_nodes[node_index].output_tensors
-        input_tensors.append(layer_output_tensors[tensor_index])
-    for layer_data in config['output_layers']:
-        layer_name, node_index, tensor_index = layer_data
-        assert layer_name in created_layers
-        layer = created_layers[layer_name]
-        layer_output_tensors = layer.inbound_nodes[node_index].output_tensors
-        output_tensors.append(layer_output_tensors[tensor_index])
-    return input_tensors, output_tensors
-
-
-def load_weights(layers, filepath, nb_input_layers=1):
-    '''Load all layer weights from a HDF5 save file. '''
-    import h5py
-    f = h5py.File(filepath, mode='r')
-
-    layers = [InputLayer(input_shape=(1,))
-              for _ in range(nb_input_layers)] + layers
-    layer_names = [n.decode('utf8') for n in f.attrs['layer_names']]
-    if len(layer_names) != len(layers):
-        raise Exception('You are trying to load a weight file '
-                        'containing ' + str(len(layer_names)) +
-                        ' layers into a model with ' +
-                        str(len(layers)) + ' layers.')
-
-    for k, name in enumerate(layer_names):
-        g = f[name]
-        weight_names = [n.decode('utf8') for n in g.attrs['weight_names']]
-        if len(weight_names):
-            weights = [g[weight_name] for weight_name in weight_names]
-            layers[k].set_weights(weights)
-
-    f.close()
-
-
-def save_weights(layers, filepath, overwrite=False):
-    '''Dumps all layer weights to a HDF5 file.
-
-    The weight file has:
-        - `layer_names` (attribute), a list of strings
-            (ordered names of model layers)
-        - for every layer, a `group` named `layer.name`
-            - for every such layer group, a group attribute `weight_names`,
-                a list of strings (ordered names of weights tensor of the layer)
-            - for every weight in the layer, a dataset
-                storing the weight value, named after the weight tensor
-    '''
-    import h5py
-    import os.path
-    # if file exists and should not be overwritten
-    if not overwrite and os.path.isfile(filepath):
-        import sys
-        get_input = input
-        if sys.version_info[:2] <= (2, 7):
-            get_input = raw_input
-        overwrite = get_input('[WARNING] %s already exists - overwrite? '
-                              '[y/n]' % (filepath))
-        while overwrite not in ['y', 'n']:
-            overwrite = get_input('Enter "y" (overwrite) or "n" (cancel).')
-        if overwrite == 'n':
-            return
-        print('[TIP] Next time specify overwrite=True in save_weights!')
-
-    f = h5py.File(filepath, 'w')
-    f.attrs['layer_names'] = [layer.name.encode('utf8')
-                              for layer in layers]
-
-    for layer in layers:
-        g = f.create_group(layer.name)
-        symbolic_weights = layer.trainable_weights + \
-            layer.non_trainable_weights
-        weight_values = layer.get_weights()
-        weight_names = []
-        for i, (w, val) in enumerate(zip(symbolic_weights, weight_values)):
-            if hasattr(w, 'name') and w.name:
-                name = str(w.name)
-            else:
-                name = 'param_' + str(i)
-            weight_names.append(name.encode('utf8'))
-        g.attrs['weight_names'] = weight_names
-        for name, val in zip(weight_names, weight_values):
-            param_dset = g.create_dataset(name, val.shape,
-                                          dtype=val.dtype)
-            param_dset[:] = val
-    f.flush()
-    f.close()
 
 
 def trainable_weights(layers):

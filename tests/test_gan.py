@@ -20,15 +20,16 @@ import theano
 import keras.initializations
 from keras.layers.convolutional import Convolution2D
 from keras.layers.core import Dense, Flatten
-from keras.engine.topology import Input, merge
+from keras.engine.topology import Input, merge, Container
 from keras.models import Sequential
+from keras.utils.layer_utils import layer_from_config
 import math
 import pytest
+import numpy as np
 
 from beras.gan import GAN, sequential_to_gan, gan_binary_crossentropy, \
     gan_outputs
-from beras.util import load_weights
-import numpy as np
+from beras.layers.core import Split
 
 
 def sample_circle(nb_samples):
@@ -137,19 +138,22 @@ def test_gan_utility_funcs(simple_gan: GAN):
 
 def test_gan_graph():
     z_shape = (1, 8, 8)
+    z = Input(shape=z_shape, name='z')
     gen_cond = Input(shape=(1, 8, 8), name='gen_cond')
 
-    def generator(inputs):
-        gen_input = merge(inputs, mode='concat', concat_axis=1)
-        return Convolution2D(10, 2, 2, activation='relu',
-                             border_mode='same')(gen_input)
+    inputs = [z, gen_cond]
+    gen_input = merge(inputs, mode='concat', concat_axis=1)
+    gen_output = Convolution2D(10, 2, 2, activation='relu',
+                               border_mode='same')(gen_input)
+    generator = Container(inputs, gen_output)
 
-    def discriminator(inputs):
-        dis_input = merge(inputs, mode='concat', concat_axis=1)
-        dis_conv = Convolution2D(5, 2, 2, activation='relu')(dis_input)
-        dis_flatten = Flatten()(dis_conv)
-        dis = Dense(1, activation='sigmoid')(dis_flatten)
-        return gan_outputs(dis)
+    f, r = Input(z_shape, name='f'), Input(z_shape, name='r')
+    inputs = [f, r]
+    dis_input = merge(inputs, mode='concat', concat_axis=1)
+    dis_conv = Convolution2D(5, 2, 2, activation='relu')(dis_input)
+    dis_flatten = Flatten()(dis_conv)
+    dis = Dense(1, activation='sigmoid')(dis_flatten)
+    discriminator = Container(inputs, gan_outputs(dis))
 
     gan = GAN(generator, discriminator, z_shape=z_shape, real_shape=z_shape,
               gen_additional_inputs=[gen_cond])
@@ -161,24 +165,28 @@ def test_gan_graph():
 def test_gan_save_weights(tmpdir):
     z_shape = (1, 8, 8)
     gen_cond = Input(shape=(1, 8, 8), name='gen_cond')
+    def get_generator():
+        z = Input(shape=z_shape, name='z')
 
-    def generator(inputs):
+        inputs = [z, gen_cond]
         gen_input = merge(inputs, mode='concat', concat_axis=1)
-        return Convolution2D(10, 2, 2, activation='relu',
-                             border_mode='same')(gen_input)
-
-    def discriminator(inputs):
+        gen_output = Convolution2D(10, 2, 2, activation='relu',
+                                   border_mode='same')(gen_input)
+        return Container(inputs, gen_output)
+    def get_discriminator():
+        f, r = Input(z_shape, name='f'), Input(z_shape, name='r')
+        inputs = [f, r]
         dis_input = merge(inputs, mode='concat', concat_axis=1)
         dis_conv = Convolution2D(5, 2, 2, activation='relu')(dis_input)
         dis_flatten = Flatten()(dis_conv)
         dis = Dense(1, activation='sigmoid')(dis_flatten)
-        return gan_outputs(dis)
+        return Container(inputs, gan_outputs(dis))
 
-    gan = GAN(generator, discriminator, z_shape=z_shape, real_shape=z_shape,
-              gen_additional_inputs=[gen_cond])
+    gan = GAN(get_generator(), get_discriminator(), z_shape=z_shape,
+              real_shape=z_shape, gen_additional_inputs=[gen_cond])
     gan.save_weights(str(tmpdir + "/{}.hdf5"))
 
-    gan_load = GAN(generator, discriminator, z_shape=z_shape,
+    gan_load = GAN(get_generator(), get_discriminator(), z_shape=z_shape,
                    real_shape=z_shape, gen_additional_inputs=[gen_cond])
 
     all_equal = True
@@ -190,19 +198,50 @@ def test_gan_save_weights(tmpdir):
             all_equal = False
     assert not all_equal
 
-    load_weights(gan_load.gen_layers, str(tmpdir + "/generator.hdf5"),
-                 nb_input_layers=0)
+    gan_load.generator.load_weights(str(tmpdir.join("generator.hdf5")))
 
     for s, l in zip(gan.gen_layers, gan_load.gen_layers):
         for sw, lw in zip(s.trainable_weights, l.trainable_weights):
             assert (sw.get_value() == lw.get_value()).all()
 
-    load_weights(gan_load.layers, str(tmpdir + "/gan.hdf5"),
-                 nb_input_layers=0)
+    gan_load.discriminator.load_weights(str(tmpdir.join("discriminator.hdf5")))
 
     for s, l in zip(gan.layers, gan_load.layers):
         for sw, lw in zip(s.trainable_weights, l.trainable_weights):
             assert (sw.get_value() == lw.get_value()).all()
+
+
+def test_gan_get_config(tmpdir):
+    z_shape = (1, 8, 8)
+
+    z = Input(z_shape, name='z')
+    g_out = Convolution2D(10, 2, 2, activation='relu', border_mode='same')(z)
+    generator = Container(z, g_out)
+    f, r = Input(z_shape, name='f'), Input(z_shape, name='r')
+
+    dis_input = merge([f, r], mode='concat', concat_axis=1)
+    dis_conv = Convolution2D(5, 2, 2, activation='relu')(dis_input)
+    dis_flatten = Flatten()(dis_conv)
+    dis = Dense(1, activation='sigmoid')(dis_flatten)
+    discriminator = Container([f, r], gan_outputs(dis))
+
+    gan = GAN(generator, discriminator, z_shape, z_shape)
+    weights_fname = str(tmpdir.mkdir("weights").join("{}.hdf5"))
+    gan.save_weights(weights_fname)
+    true_config = gan.get_config()
+
+    import json
+    with open(os.path.join(TEST_OUTPUT_DIR, "true_config.json"), 'w+') as f:
+        json.dump(true_config, f, indent=2)
+
+    gan_from_config = layer_from_config(true_config, custom_objects={
+        'GAN': GAN,
+        'Split': Split,
+    })
+
+    with open(os.path.join(TEST_OUTPUT_DIR, "loaded_config.json"), 'w+') as f:
+        json.dump(gan_from_config.get_config(), f, indent=2)
+    gan_from_config.load_weights(weights_fname)
 
 
 def test_gan_stop_regularizer():
