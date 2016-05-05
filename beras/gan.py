@@ -28,8 +28,8 @@ from keras.engine.topology import Input, merge, Container
 from keras.utils.layer_utils import layer_from_config
 
 from beras.models import AbstractModel
-from beras.util import collect_layers, trainable_weights, \
-    rename_layer
+from beras.util import collect_layers, collect_layers_and_nodes, \
+    trainable_weights, rename_layer, FunctionWrapper
 
 
 def flatten(listOfLists):
@@ -154,31 +154,27 @@ class GAN(AbstractModel):
 
     def __init__(self, generator: Container,
                  discriminator: Container,
-                 z_shape, real_shape, gen_additional_inputs=[],
-                 dis_additional_inputs=[],
+                 z_shape, real_shape,
                  ):
         self.generator = generator
         self.discriminator = discriminator
 
         self.z_shape = (None,) + z_shape
         self.real_shape = (None,) + real_shape
-        self.z = Input(batch_shape=self.z_shape, name='z')
-        self.real = Input(batch_shape=self.real_shape, name='real')
+        self.z = generator.inputs[0]
 
-        self.gen_additional_inputs = gen_additional_inputs
-        self.gen_inputs = [self.z] + gen_additional_inputs
-        self.fake = self.generator(self.gen_inputs)
-        self.gen_layers = collect_layers(self.gen_inputs, [self.fake])
+        self.fake = generator.output
+        self.fake_placeholder = discriminator.inputs[0]
+        self.real = discriminator.inputs[1]
 
-        self.dis_additional_inputs = dis_additional_inputs
-        self.dis_inputs = [self.fake, self.real] + dis_additional_inputs
+        self._maybe_duplicate_inputs = self.generator.inputs + \
+            self.discriminator.inputs[1:]
+        self.dis_outs = self.discriminator(
+            [self.fake] + discriminator.inputs[1:])
 
-        self._maybe_duplicate_inputs = self.gen_inputs + [self.real] \
-            + dis_additional_inputs
-        self.dis_outs = self.discriminator(self.dis_inputs)
         assert len(self.dis_outs) == 3, \
             "The discriminator must return 3 tensors"
-        self.dis_layers = collect_layers(self.dis_inputs, self.dis_outs)
+
         self._gan_regularizers = []
         self.updates = []
         self.metrics = OrderedDict()
@@ -201,31 +197,30 @@ class GAN(AbstractModel):
 
     @property
     def layers(self):
-        return self.gen_layers + self.dis_layers
+        return self.generator.layers + self.discriminator.layers
 
-    def debug_dict(self):
-        def get_outputs(layers, loss):
-            names_with_outputs = []
-            for l in layers:
-                outs = l.output
-                if type(outs) != list:
-                    outs = [outs]
-                for i, o in enumerate(outs):
-                    if len(outs) > 1:
-                        name = "{}_{}_grad".format(l.name, i)
-                    else:
-                        name = '{}_grad'.format(l.name)
-                    names_with_outputs.append((name, o))
-            out_dict = OrderedDict(names_with_outputs)
-            return list(zip(out_dict.keys(),
-                            T.grad(loss, list(out_dict.values()),
-                                   disconnected_inputs='warn')))
-
+    def layer_output_tensors(self):
         self._ensure_build()
 
-        outs = OrderedDict([(l.name, l.output) for l in self.layers])
-        outs.update(get_outputs(self.gen_layers, self.g_loss))
-        outs.update(get_outputs(self.dis_layers, self.g_loss))
+        def collect_all_layers(layers):
+            all_layers = []
+            for layer in layers:
+                if hasattr(layer, 'layers'):
+                    all_layers += collect_all_layers(layer.layers)
+                else:
+                    all_layers.append(layer)
+            return all_layers
+
+        layers = collect_all_layers([self.generator, self.discriminator])
+        outs = OrderedDict()
+        for layer in layers:
+            node = layer.inbound_nodes[-1]
+            if len(node.output_tensors) > 1:
+                for i, x in enumerate(node.output_tensors):
+                    output_name = "{}_{}".format(layer.name, i)
+                    outs[output_name] = x
+            else:
+                outs[layer.name] = node.output_tensors[0]
         return outs
 
     def _gather_list_attr(self, layers, attr):
@@ -273,9 +268,9 @@ class GAN(AbstractModel):
         self.metrics['d_loss'] = d_loss
 
         g_updates, g_loss_with_reg = get_updates(
-            g_optimizer, self.gen_layers, g_loss)
+            g_optimizer, self.generator.layers, g_loss)
         d_updates, d_loss_with_reg = get_updates(
-            d_optimizer, self.dis_layers, d_loss)
+            d_optimizer, self.discriminator.layers, d_loss)
 
         self.metrics['g_reg'] = g_loss_with_reg - g_loss
 
@@ -306,29 +301,26 @@ class GAN(AbstractModel):
         assert self._is_built, \
             "Did you forget to call `build()`, before `compile_generate`?"
         self._generate = K.function(
-            self.gen_inputs + [K.learning_phase()],
-            self.fake)
+            self.generator.inputs + [K.learning_phase()], self.fake)
 
-    def compile_debug(self, keys, gradients=False):
+    def compile_custom_layers(self, keys):
         assert self._is_built, \
             "Did you forget to call `build()`, before `compile_debug`?"
 
-        debug_dict = self.debug_dict()
+        layer_output_tensors = self.layer_output_tensors()
         selected_dict = []
         for k in keys:
-            assert any([name == k for name in debug_dict.keys()]), \
+            assert any([name == k for name in layer_output_tensors.keys()]), \
                 "There exists no layer that startswith: {}".format(k)
-        for name, tensor in debug_dict.items():
+        for name, tensor in layer_output_tensors.items():
             if any((name == k for k in keys)):
                 selected_dict.append((name, tensor))
-                if gradients:
-                    grad_name = name + '_grad'
-                    selected_dict.append((grad_name, debug_dict[grad_name]))
 
         selected_dict = OrderedDict(selected_dict)
-        self.debug_keys = list(selected_dict.keys())
-        self._debug = K.function(
-            self.inputs, list(selected_dict.values()))
+        fn = K.function(self.inputs, list(selected_dict.values()),
+                        givens=[(self.fake_placeholder, self.fake)])
+        return FunctionWrapper(fn, self.input_order,
+                               list(selected_dict.keys()))
 
     def add_gan_regularizer(self, r):
         r.set_gan(self)
@@ -400,14 +392,8 @@ class GAN(AbstractModel):
         inputs['keras_learning_phase'] = 0
         ins = [inputs[n] for n in self.input_order
                if n in inputs]
-        assert len(ins) == len(self.gen_inputs) + 1
+        assert len(ins) == len(self.generator.inputs) + 1
         return self._generate(ins)
-
-    def debug(self, inputs={}, train=True):
-        inputs['keras_learning_phase'] = int(train)
-        ins = [inputs[n] for n in self.input_order]
-        outs = self._debug(ins)
-        return dict(zip(self.debug_keys, outs))
 
     def interpolate(self, x, y, nb_steps=100):
         assert x.shape == y.shape == self.z_shape[1:]
@@ -454,11 +440,6 @@ class GAN(AbstractModel):
         )
 
     def get_config(self):
-        assert self.gen_additional_inputs == [], \
-            "get_config cannot handle additional inputs"
-        assert self.dis_additional_inputs == [], \
-            "get_config cannot handle additional inputs"
-
         return {
             'class_name': 'GAN',
             'config': {

@@ -99,8 +99,7 @@ def rename_layer(keras_tensor, name):
     layer = keras_tensor._keras_history[0]
     layer.name = name
 
-
-def collect_layers(inputs, outputs):
+def collect_layers_and_nodes(inputs, outputs):
     if type(inputs) not in (tuple, list):
         inputs = [inputs]
 
@@ -222,8 +221,14 @@ def collect_layers(inputs, outputs):
 
     # set nodes and nodes_by_depth
     container_nodes = container_nodes
-    nodes_by_depth = nodes_by_depth
-    return layers
+    nodes = []
+    for depth in depth_keys:
+        nodes.extend(nodes_by_depth[depth])
+    return layers, nodes
+
+
+def collect_layers(inputs, outputs):
+    return collect_layers_and_nodes(inputs, outputs)[0]
 
 
 def trainable_weights(layers):
@@ -232,3 +237,15 @@ def trainable_weights(layers):
         weights += collect_trainable_weights(layer)
     return weights
 
+
+class FunctionWrapper:
+    def __init__(self, function, input_keys, output_keys):
+        self.function = function
+        self.input_keys = input_keys
+        self.output_keys = output_keys
+
+    def __call__(self, inputs, train=True):
+        inputs['keras_learning_phase'] = int(train)
+        ins = [inputs[n] for n in self.input_keys if n in inputs]
+        outs = self.function(ins)
+        return dict(zip(self.output_keys, outs))

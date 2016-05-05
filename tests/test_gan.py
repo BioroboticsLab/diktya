@@ -21,15 +21,14 @@ import keras.initializations
 from keras.layers.convolutional import Convolution2D
 from keras.layers.core import Dense, Flatten
 from keras.engine.topology import Input, merge, Container
-from keras.models import Sequential
 from keras.utils.layer_utils import layer_from_config
 import math
 import pytest
 import numpy as np
 
-from beras.gan import GAN, sequential_to_gan, gan_binary_crossentropy, \
-    gan_outputs
+from beras.gan import GAN, gan_binary_crossentropy, gan_outputs
 from beras.layers.core import Split
+from beras.util import sequential, concat
 
 
 def sample_circle(nb_samples):
@@ -75,19 +74,70 @@ simple_gan_batch_size = 64
 simple_gan_nb_z = 20
 simple_gan_nb_out = 2
 simple_gan_z_shape = (simple_gan_batch_size, simple_gan_nb_z)
+simple_gan_real_shape = (simple_gan_batch_size, simple_gan_nb_out)
 
 
 @pytest.fixture()
 def simple_gan():
-    generator = Sequential()
-    generator.add(Dense(simple_gan_nb_z, activation='relu',
-                        input_dim=simple_gan_nb_z))
-    generator.add(Dense(simple_gan_nb_z, activation='relu'))
-    generator.add(Dense(simple_gan_nb_out, activation='sigmoid'))
-    discriminator = Sequential()
-    discriminator.add(Dense(20, activation='relu', input_dim=2))
-    discriminator.add(Dense(1, activation='sigmoid'))
-    return sequential_to_gan(generator, discriminator)
+    z = Input(batch_shape=simple_gan_z_shape, name='z')
+    generator = sequential([
+        Dense(simple_gan_nb_z, activation='relu', name='g1'),
+        Dense(simple_gan_nb_z, activation='relu', name='g2'),
+        Dense(simple_gan_nb_out, activation='sigmoid', name='g3'),
+    ])(z)
+
+    fake = Input(batch_shape=simple_gan_real_shape, name='fake')
+    real = Input(batch_shape=simple_gan_real_shape, name='real')
+
+    discriminator = sequential([
+        Dense(20, activation='relu', input_dim=2, name='d1'),
+        Dense(1, activation='sigmoid', name='d2')
+    ])(concat([fake, real], axis=0))
+    return GAN(Container(z, generator),
+               Container([fake, real],  gan_outputs(discriminator)),
+               simple_gan_z_shape[1:], simple_gan_real_shape[1:])
+
+
+def test_gan_custom_layer_graph():
+    z_shape = (1, 8, 8)
+    z = Input(shape=z_shape, name='z')
+    gen_cond = Input(shape=(1, 8, 8), name='gen_cond')
+
+    inputs = [z, gen_cond]
+    gen_input = merge(inputs, mode='concat', concat_axis=1)
+    gen_output = Convolution2D(1, 2, 2, activation='relu',
+                               name='g1',
+                               border_mode='same')(gen_input)
+    generator = Container(inputs, gen_output)
+
+    f, r = Input(z_shape, name='fake'), Input(z_shape, name='real')
+    inputs = [f, r]
+    dis_input = merge(inputs, mode='concat', concat_axis=0)
+    dis_conv = Convolution2D(5, 2, 2, name='d1', activation='relu')(dis_input)
+    dis_flatten = Flatten()(dis_conv)
+    dis = Dense(1, activation='sigmoid')(dis_flatten)
+    discriminator = Container(inputs, gan_outputs(dis))
+
+    gan = GAN(generator, discriminator, z_shape=z_shape, real_shape=z_shape)
+    gan.build('adam', 'adam', gan_binary_crossentropy)
+    fn = gan.compile_custom_layers(['g1', 'd1'])
+    z = np.random.uniform(-1, 1, (64,) + z_shape)
+    real = np.random.uniform(-1, 1, (64,) + z_shape)
+    cond = np.random.uniform(-1, 1, (64,) + z_shape)
+    print(z.shape)
+    print(real.shape)
+    print(cond.shape)
+    fn({'z': z, 'gen_cond': cond, 'real': real})
+
+
+def test_gan_custom_layer_function(simple_gan):
+    simple_gan.build('adam', 'adam', gan_binary_crossentropy)
+    for k in simple_gan.layer_output_tensors().keys():
+        print(k)
+    fn = simple_gan.compile_custom_layers(['g1', 'g2', 'd1'])
+    z = np.random.uniform(-1, 1, simple_gan_z_shape)
+    real = np.random.uniform(-1, 1, (1, 2))
+    fn({'z': z, 'real': real})
 
 
 def test_gan_learn_simple_distribution():
@@ -155,8 +205,7 @@ def test_gan_graph():
     dis = Dense(1, activation='sigmoid')(dis_flatten)
     discriminator = Container(inputs, gan_outputs(dis))
 
-    gan = GAN(generator, discriminator, z_shape=z_shape, real_shape=z_shape,
-              gen_additional_inputs=[gen_cond])
+    gan = GAN(generator, discriminator, z_shape=z_shape, real_shape=z_shape)
     gan.build('adam', 'adam', gan_binary_crossentropy)
     gan.compile()
     gan.generate({'gen_cond': np.zeros((64,) + z_shape)}, nb_samples=64)
@@ -183,11 +232,11 @@ def test_gan_save_weights(tmpdir):
         return Container(inputs, gan_outputs(dis))
 
     gan = GAN(get_generator(), get_discriminator(), z_shape=z_shape,
-              real_shape=z_shape, gen_additional_inputs=[gen_cond])
+              real_shape=z_shape)
     gan.save_weights(str(tmpdir + "/{}.hdf5"))
 
     gan_load = GAN(get_generator(), get_discriminator(), z_shape=z_shape,
-                   real_shape=z_shape, gen_additional_inputs=[gen_cond])
+                   real_shape=z_shape)
 
     all_equal = True
     for s, l in zip(gan.layers, gan_load.layers):
@@ -200,7 +249,7 @@ def test_gan_save_weights(tmpdir):
 
     gan_load.generator.load_weights(str(tmpdir.join("generator.hdf5")))
 
-    for s, l in zip(gan.gen_layers, gan_load.gen_layers):
+    for s, l in zip(gan.generator.layers, gan_load.generator.layers):
         for sw, lw in zip(s.trainable_weights, l.trainable_weights):
             assert (sw.get_value() == lw.get_value()).all()
 
