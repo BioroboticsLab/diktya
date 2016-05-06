@@ -156,8 +156,8 @@ class LinearInBounds(Layer):
 
     def get_config(self):
         config = {
-            'low': self.low,
-            'high': self.high,
+            'low': self.activity_in_bounds.low,
+            'high': self.activity_in_bounds.high,
             'clip': self.clip,
         }
         base_config = super().get_config()
