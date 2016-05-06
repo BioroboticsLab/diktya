@@ -34,23 +34,6 @@ def visualise_tiles(images, show=True):
         plt.show()
 
 
-def _save_image_worker(data, fname, cmap):
-    # matplotlib seems to leak memory. Quite a hack
-    sizes = np.shape(data)
-    height = float(sizes[0])
-    width = float(sizes[1])
-    fig = plt.figure()
-    fig.set_size_inches(width/height, 1, forward=False)
-    ax = plt.Axes(fig, [0., 0., 1., 1.])
-    ax.set_axis_off()
-    fig.add_axes(ax)
-    ax.imshow(data, cmap=cmap)
-    plt.savefig(fname, dpi=height)
-    plt.close(fig)
-
-
 def save_image(data, fname, cmap='gray'):
-    proc = multiprocessing.Process(target=_save_image_worker,
-                                   args=(data, fname, cmap))
-    proc.daemon = True
-    proc.start()
+    from scipy.misc import imsave
+    imsave(fname, data, format='png')
