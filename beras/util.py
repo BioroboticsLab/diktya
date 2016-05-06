@@ -14,6 +14,7 @@
 
 from keras.engine.topology import merge, InputLayer
 from keras.engine.training import collect_trainable_weights
+from keras.layers.core import Activation
 import theano.tensor as T
 import copy
 import re
@@ -98,6 +99,11 @@ def namespace(namespace, inputs, outputs):
 def rename_layer(keras_tensor, name):
     layer = keras_tensor._keras_history[0]
     layer.name = name
+
+
+def name_tensor(keras_tensor, name):
+    return Activation('linear', name=name)(keras_tensor)
+
 
 def collect_layers_and_nodes(inputs, outputs):
     if type(inputs) not in (tuple, list):

@@ -74,7 +74,7 @@ def zip_tile(*arrs):
 
     tiled = tile(tiles, columns_must_be_multiple_of=len(arrs))
     assert len(tiled) == 1, "only grayscale image are supported"
-    return tiled
+    return tiled[0]
 
 
 def resize_nearest_neighbour(images, scale):
