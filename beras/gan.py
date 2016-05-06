@@ -209,7 +209,6 @@ class GAN(AbstractModel):
             for layer in layers:
                 if hasattr(layer, 'layers'):
                     all_layers.append(layer)
-                    print("Container Layer: {}".format(layer.name))
                     all_layers += collect_all_layers(layer.layers)
                 else:
                     all_layers.append(layer)
@@ -312,9 +311,6 @@ class GAN(AbstractModel):
             "Did you forget to call `build()`, before `compile_debug`?"
 
         layer_output_tensors = self.layer_output_tensors()
-        for k in sorted(layer_output_tensors.keys()):
-            print(k)
-
         selected_dict = []
         for k in keys:
             assert any([name == k for name in layer_output_tensors.keys()]), \
