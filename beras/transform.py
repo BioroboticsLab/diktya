@@ -62,6 +62,21 @@ def tile(tiles, columns_must_be_multiple_of=1):
     return im
 
 
+def zip_tile(*arrs):
+    assert len(arrs) >= 1
+    length = len(arrs[0])
+    for a in arrs:
+        assert len(a) == length, "all input arrays must have the same size"
+    tiles = []
+    for i in range(length):
+        for a in arrs:
+            tiles.append(a[i])
+
+    tiled = tile(tiles, columns_must_be_multiple_of=len(arrs))
+    assert len(tiled) == 1, "only grayscale image are supported"
+    return tiled
+
+
 def resize_nearest_neighbour(images, scale):
     assert type(scale) == int
     assert scale >= 1
