@@ -13,21 +13,17 @@
 # limitations under the License.
 
 from beras.transform import tile, zip_tile
-import numpy as np
 import matplotlib.pyplot as plt
-import multiprocessing
 
 
 def zip_visualise_tiles(*arrs, show=True):
-    import matplotlib.pyplot as plt
     tiled = zip_tile(*arrs)
-    plt.imshow(tiled[0], cmap='gray')
+    plt.imshow(tiled, cmap='gray')
     if show:
         plt.show()
 
 
 def visualise_tiles(images, show=True):
-    import matplotlib.pyplot as plt
     tiled_fakes = tile(images)
     plt.imshow(tiled_fakes[0], cmap='gray')
     if show:
