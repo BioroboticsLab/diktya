@@ -114,7 +114,7 @@ class AutomaticLearningRateScheduler(Callback):
         self.current_best = np.infty
         self.current_best_epoch = 0
 
-    def on_epoch_start(self, epoch, logs={}):
+    def on_epoch_begin(self, epoch, logs={}):
         self.epoch_log = []
 
     def on_batch_end(self, batch, logs={}):
@@ -140,7 +140,7 @@ class HistoryPerBatch(Callback):
     def __init__(self):
         self.history = {}
 
-    def on_epoch_start(self, epoch, logs=None):
+    def on_epoch_begin(self, epoch, logs=None):
         for k in self.history.keys():
             self.history[k].append([])
 
