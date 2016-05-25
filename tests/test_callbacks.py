@@ -104,7 +104,7 @@ def test_automatic_lr_scheduler():
 
 def test_history_per_batch():
     hist = HistoryPerBatch()
-    hist.on_epoch_start(0)
+    hist.on_epoch_begin(0)
     losses = [[]]
     for i in range(5):
         loss = float(np.random.sample(1))
@@ -112,14 +112,14 @@ def test_history_per_batch():
         losses[-1].append(loss)
 
     losses.append([])
-    hist.on_epoch_start(1)
+    hist.on_epoch_begin(1)
     for i in range(5):
         loss = float(np.random.sample(1))
         hist.on_batch_end(i, logs={'loss': loss})
         losses[-1].append(loss)
 
     losses.append([])
-    hist.on_epoch_start(1)
+    hist.on_epoch_begin(1)
     for i in range(5):
         loss = float(np.random.sample(1))
         hist.on_batch_end(i, logs={'loss': loss})
