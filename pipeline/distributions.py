@@ -24,7 +24,7 @@ def to_radians(x):
 
 
 class JsonConvertable:
-    def to_config(self):
+    def get_config(self):
         return {"name": self.__class__.__name__}
 
     @classmethod
@@ -34,10 +34,10 @@ class JsonConvertable:
         return cls(**args)
 
     def to_json(self):
-        return json.dumps(self.to_config())
+        return json.dumps(self.get_config())
 
     def __eq__(self, other):
-        return self.to_config() == other.to_config()
+        return self.get_config() == other.get_config()
 
     def __neq__(self, other):
         return not self.__eq__(other)
@@ -96,8 +96,8 @@ class SubtDivide(Normalization):
     def denormalize(self, array):
         return array * self.scale + self.subt
 
-    def to_config(self):
-        config = super().to_config()
+    def get_config(self):
+        config = super().get_config()
         config['subt'] = self.subt
         config['scale'] = self.scale
         return config
@@ -114,8 +114,8 @@ class UnitIntervalTo(Normalization):
     def denormalize(self, array):
         return (array - self.start) / (self.end - self.start)
 
-    def to_config(self):
-        config = super().to_config()
+    def get_config(self):
+        config = super().get_config()
         config['start'] = self.start
         config['end'] = self.end
         return config
@@ -151,9 +151,9 @@ class CombineNormalization(Normalization):
             x = norm.denormalize(x)
         return x
 
-    def to_config(self):
-        config = super().to_config()
-        config['normalizations'] = [n.to_config() for n in self.normalizations]
+    def get_config(self):
+        config = super().get_config()
+        config['normalizations'] = [n.get_config() for n in self.normalizations]
         return config
 
 
@@ -180,8 +180,8 @@ class Constant(Distribution):
     def default_normalization(self):
         return ConstantNormalization(self.value)
 
-    def to_config(self):
-        config = super().to_config()
+    def get_config(self):
+        config = super().get_config()
         config['value'] = self.value
         return config
 
@@ -198,8 +198,8 @@ class Normal(Distribution):
     def default_normalization(self):
         return SubtDivide(self.mean, self.std)
 
-    def to_config(self):
-        config = super().to_config()
+    def get_config(self):
+        config = super().get_config()
         config['mean'] = self.mean
         config['std'] = self.std
         return config
@@ -232,8 +232,8 @@ class TruncNormal(Distribution):
     def default_normalization(self):
         return CombineNormalization([SubtDivide(self.a, self.length), UnitIntervalTo(-1, 1)])
 
-    def to_config(self):
-        config = super().to_config()
+    def get_config(self):
+        config = super().get_config()
         config['a'] = self.a
         config['b'] = self.b
         config['mean'] = self.mean
@@ -257,8 +257,8 @@ class Uniform(Distribution):
     def default_normalization(self):
         return CombineNormalization([SubtDivide(self.low, self.length), UnitIntervalTo(-1, 1)])
 
-    def to_config(self):
-        config = super().to_config()
+    def get_config(self):
+        config = super().get_config()
         config['low'] = self.low
         config['high'] = self.high
         return config
@@ -362,10 +362,10 @@ class DistributionCollection(Distribution, Normalization):
             arr[name] = norm.denormalize(norm_arr[name])
         return arr
 
-    def to_config(self):
-        config = super().to_config()
+    def get_config(self):
+        config = super().get_config()
         config['distributions'] = {
-            name: [dist.to_config(), nb_elems, norm.to_config()]
+            name: [dist.get_config(), nb_elems, norm.get_config()]
             for name, (dist, nb_elems, norm) in self._dist_nb_elems_norm.items()
         }
         return config
