@@ -360,9 +360,9 @@ class DistributionCollection(Distribution, Normalization):
 def examplary_tag_distribution(nb_bits=12):
     return {
         'bits': (Bernoulli(), nb_bits),
-        'z': (Uniform(-np.pi, np.pi), 2, SinCosAngleNorm()),
-        'x': (Zeros(), 2),
-        'y': (Zeros(), 2),
+        'z_rotation': (Uniform(-np.pi, np.pi), 1, SinCosAngleNorm()),
+        'x_rotation': (Zeros(), 1),
+        'y_rotation': (Zeros(), 1),
         'center': (Normal(0, 2), 2),
         'radius': (Normal(24, 0.4), 1),
         'inner_ring_radius': (Constant(0.4), 1),
