@@ -83,6 +83,11 @@ class ConstantNormalization(JsonConvertable):
     def denormalize(self, array):
         return np.ones_like(array)*self.value
 
+    def get_config(self):
+        config = super().get_config()
+        config['value'] = self.value
+        return config
+
 
 class SubtDivide(Normalization):
     def __init__(self, subt, scale):
