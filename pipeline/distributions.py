@@ -73,6 +73,17 @@ class Normalization(JsonConvertable):
         return array
 
 
+class ConstantNormalization(JsonConvertable):
+    def __init__(self, value):
+        self.value = value
+
+    def normalize(self, array):
+        return np.zeros_like(array)
+
+    def denormalize(self, array):
+        return np.ones_like(array)*self.value
+
+
 class SubtDivide(Normalization):
     def __init__(self, subt, scale):
         assert scale > 0
@@ -165,6 +176,9 @@ class Constant(Distribution):
 
     def sample(self, shape):
         return self.value*np.ones(shape)
+
+    def default_normalization(self):
+        return ConstantNormalization(self.value)
 
     def to_config(self):
         config = super().to_config()
