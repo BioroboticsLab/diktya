@@ -334,36 +334,35 @@ class DistributionCollection(Distribution, Normalization):
                 norm = get(descr[2])
                 self._dist_nb_elems_norm[name] = (distribution, nb_elems, norm)
 
-        self._nb_elems = {n: nb_elems for n, (_, nb_elems, _)
-                          in self._dist_nb_elems_norm.items()}
-        self._normalizations = {n: norm for n, (_, _, norm)
-                                in self._dist_nb_elems_norm.items()}
-        self._distributions = {n: dist for n, (dist, _, _)
+        self.nb_elems = {n: nb_elems for n, (_, nb_elems, _)
+                         in self._dist_nb_elems_norm.items()}
+        self.normalizations = {n: norm for n, (_, _, norm)
                                in self._dist_nb_elems_norm.items()}
+        self.distributions = {n: dist for n, (dist, _, _) in self._dist_nb_elems_norm.items()}
 
         self.dtype = [(name, "({},)float32".format(nb_elems))
-                      for name, nb_elems in sorted(self._nb_elems.items())]
+                      for name, nb_elems in sorted(self.nb_elems.items())]
         self.norm_dtype = [
             (name, "({},)float32".format(nb_elems*len(norm.normalize(np.zeros((1,))))))
             for name, (_, nb_elems, norm) in self._dist_nb_elems_norm.items()]
 
-        self.keys = list(self._nb_elems.keys())
+        self.names = list(self.nb_elems.keys())
 
     def sample(self, batch_size):
         arr = np.zeros((batch_size,), dtype=self.dtype)
-        for name, dist in self._distributions.items():
+        for name, dist in self.distributions.items():
             arr[name] = dist.sample(arr[name].shape)
         return arr
 
     def normalize(self, arr):
         norm_arr = np.zeros((len(arr),), dtype=self.norm_dtype)
-        for name, norm in self._normalizations.items():
+        for name, norm in self.normalizations.items():
             norm_arr[name] = norm.normalize(arr[name])
         return norm_arr
 
     def denormalize(self, norm_arr):
         arr = np.zeros((len(norm_arr),), dtype=self.dtype)
-        for name, norm in self._normalizations.items():
+        for name, norm in self.normalizations.items():
             arr[name] = norm.denormalize(norm_arr[name])
         return arr
 
@@ -374,6 +373,7 @@ class DistributionCollection(Distribution, Normalization):
             for name, (dist, nb_elems, norm) in self._dist_nb_elems_norm.items()
         }
         return config
+
 
 
 def examplary_tag_distribution(nb_bits=12):

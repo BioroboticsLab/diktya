@@ -166,12 +166,12 @@ def test_distribution_collection_serialization():
     arr = dists.sample(n)
     arr_norm = dists.normalize(arr)
     arr_norm_loaded = dists_loaded.normalize(arr)
-    for key in dists.keys:
-        np.testing.assert_allclose(arr_norm[key], arr_norm_loaded[key])
+    for name in dists.names:
+        np.testing.assert_allclose(arr_norm[name], arr_norm_loaded[name])
 
     n = 10000
     arr = dists.sample(n)
     arr_loaded = dists_loaded.sample(n)
-    for key in dists.keys:
-        assert abs(arr[key].mean() - arr_loaded[key].mean()) <= 0.05
-        assert abs(arr[key].std() - arr_loaded[key].std()) <= 0.05
+    for name in dists.names:
+        assert abs(arr[name].mean() - arr_loaded[name].mean()) <= 0.05
+        assert abs(arr[name].std() - arr_loaded[name].std()) <= 0.05
