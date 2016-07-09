@@ -94,7 +94,10 @@ class LearningRateScheduler(Callback):
     def on_epoch_end(self, epoch, logs={}):
         epoch = epoch
         if epoch in self.schedule:
-            K.set_value(self.optimizer.lr, self.schedule[epoch])
+            new_value = self.schedule[epoch]
+            print()
+            print("Setting learning rate to: {}".format(new_value))
+            K.set_value(self.optimizer.lr, new_value)
 
 
 class AutomaticLearningRateScheduler(Callback):
@@ -149,3 +152,18 @@ class HistoryPerBatch(Callback):
             if k not in self.history:
                 self.history[k] = [[]]
             self.history[k][-1].append(v)
+
+    def plot(self, fig=None, axes=None):
+        if fig is None and axes is None:
+            fig = plt.figure()
+        if axes is None:
+            axes = fig.add_subplot(111)
+
+        for label, hist in self.history.items():
+            means = []
+            for epoch in hist:
+                means.append(np.mean(epoch))
+            axes.plot(means, label=label)
+        axes.set_xlabel('epoch')
+        axes.set_ylabel('loss')
+        return fig, axes

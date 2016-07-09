@@ -15,6 +15,7 @@
 
 import numpy as np
 
+from conftest import TEST_OUTPUT_DIR
 from beras.callbacks import SaveModels, LearningRateScheduler, \
     AutomaticLearningRateScheduler, HistoryPerBatch
 from keras.models import Sequential
@@ -23,6 +24,7 @@ from keras.optimizers import Adam
 import keras.backend as K
 import os
 import pytest
+import seaborn  # noqa
 
 
 def test_save_models(tmpdir):
@@ -126,3 +128,6 @@ def test_history_per_batch():
         losses[-1].append(loss)
 
     assert hist.history['loss'] == losses
+
+    fig, axes = hist.plot()
+    fig.savefig(TEST_OUTPUT_DIR + "/callback_history.png")
