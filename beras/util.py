@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras.engine.topology import merge, InputLayer
-from keras.engine.training import collect_trainable_weights
+from contextlib import contextmanager
+from keras.engine.topology import merge
 from keras.layers.core import Activation
 import theano.tensor as T
-import copy
 import re
 
 
@@ -51,6 +50,28 @@ def add_border_repeat(input, border):
     padded = T.concatenate([h_start_padding, w_padded,
                             h_end_padding], axis=2)
     return padded
+
+
+@contextmanager
+def trainable(model, trainable):
+    trainables = []
+    for layer in model.layers:
+        trainables.append(layer.trainable)
+        layer.trainable = trainable
+    yield
+    for t, layer in zip(trainables, model.layers):
+        layer.trainable = t
+
+
+def keras_copy(obj):
+    config = obj.get_config()
+    del config['name']
+    return type(obj)(**config)
+
+
+def get_layer(keras_tensor):
+    layer = keras_tensor._keras_history[0]
+    return layer
 
 
 def sequential(layers, ns=None, trainable=True):
@@ -103,155 +124,3 @@ def rename_layer(keras_tensor, name):
 
 def name_tensor(keras_tensor, name):
     return Activation('linear', name=name)(keras_tensor)
-
-
-def collect_layers_and_nodes(inputs, outputs):
-    if type(inputs) not in (tuple, list):
-        inputs = [inputs]
-
-    if type(outputs) not in (tuple, list):
-        outputs = [outputs]
-
-    # container_nodes: set of nodes included in the graph
-    # (not all nodes included in the layers are relevant to the current graph).
-    container_nodes = set()  # ids of all nodes relevant to the Container
-    nodes_depths = {}  # map {node: depth value}
-    layers_depths = {}  # map {layer: depth value}
-
-    def build_map_of_graph(tensor, seen_nodes=set(), depth=0,
-                           layer=None, node_index=None, tensor_index=None):
-        '''This recursively updates the maps nodes_depths,
-        layers_depths and the set container_nodes.
-        Does not try to detect cycles in graph (TODO?)
-
-        # Arguments
-            tensor: some tensor in a graph
-            seen_nodes: set of node ids ("{layer.name}_ib-{node_index}")
-                of nodes seen so far. Useful to prevent infinite loops.
-            depth: current depth in the graph (0 = last output).
-            layer: layer from which `tensor` comes from. If not provided,
-                will be obtained from `tensor._keras_history`.
-            node_index: node index from which `tensor` comes from.
-            tensor_index: tensor_index from which `tensor` comes from.
-        '''
-        if not layer or node_index is None or tensor_index is None:
-            layer, node_index, tensor_index = tensor._keras_history
-        node = layer.inbound_nodes[node_index]
-
-        # prevent cycles
-        if node in seen_nodes:
-            return
-        seen_nodes.add(node)
-
-        # basic sanity checks
-        assert node.outbound_layer == layer
-        assert node.output_tensors[tensor_index] == tensor
-
-        node_key = layer.name + '_ib-' + str(node_index)
-        # update container_nodes
-        container_nodes.add(node_key)
-        # update nodes_depths
-        if node not in nodes_depths:
-            nodes_depths[node] = depth
-        else:
-            nodes_depths[node] = max(depth, nodes_depths[node])
-        # update layers_depths
-        if layer not in layers_depths:
-            layers_depths[layer] = depth
-        else:
-            layers_depths[layer] = max(depth, layers_depths[layer])
-
-        # propagate to all previous tensors connected to this node
-        for i in range(len(node.inbound_layers)):
-            x = node.input_tensors[i]
-            layer = node.inbound_layers[i]
-            if x in inputs or layer in inputs:
-                continue
-            node_index = node.node_indices[i]
-            tensor_index = node.tensor_indices[i]
-            build_map_of_graph(x, copy.copy(seen_nodes), depth + 1,
-                               layer, node_index, tensor_index)
-
-    for x in outputs:
-        build_map_of_graph(x, seen_nodes=set(), depth=0)
-
-    # build a map {depth: list of nodes with this depth}
-    nodes_by_depth = {}
-    for node, depth in nodes_depths.items():
-        if depth not in nodes_by_depth:
-            nodes_by_depth[depth] = []
-        nodes_by_depth[depth].append(node)
-
-    # build a map {depth: list of layers with this depth}
-    layers_by_depth = {}
-    for layer, depth in layers_depths.items():
-        if depth not in layers_by_depth:
-            layers_by_depth[depth] = []
-        layers_by_depth[depth].append(layer)
-
-    depth_keys = list(nodes_by_depth.keys())
-    depth_keys.sort(reverse=True)
-
-    # set layers and layers_by_depth
-    layers = []
-    for depth in depth_keys:
-        layers_for_depth = layers_by_depth[depth]
-        # container.layers needs to have a deterministic order
-        layers_for_depth.sort(key=lambda x: x.name)
-        for layer in layers_for_depth:
-            layers.append(layer)
-    layers = layers
-    layers_by_depth = layers_by_depth
-
-    computable_tensors = []
-    for x in inputs:
-        computable_tensors.append(x)
-
-    layers_with_complete_input = []  # to provide a better error msg
-    for depth in depth_keys:
-        for node in nodes_by_depth[depth]:
-            layer = node.outbound_layer
-            if layer:
-                for x in node.input_tensors:
-                    if x not in computable_tensors:
-                        raise Exception(
-                            'Graph disconnected: '
-                            'cannot obtain value for tensor ' +
-                            str(x) + ' at layer "' + layer.name + '". '
-                            'The following previous layers '
-                            'were accessed without issue: ' +
-                            str(layers_with_complete_input))
-                for x in node.output_tensors:
-                    computable_tensors.append(x)
-                layers_with_complete_input.append(layer.name)
-
-    # set nodes and nodes_by_depth
-    container_nodes = container_nodes
-    nodes = []
-    for depth in depth_keys:
-        nodes.extend(nodes_by_depth[depth])
-    return layers, nodes
-
-
-def collect_layers(inputs, outputs):
-    return collect_layers_and_nodes(inputs, outputs)[0]
-
-
-def trainable_weights(layers):
-    weights = []
-    for layer in layers:
-        weights += collect_trainable_weights(layer)
-    return weights
-
-
-class FunctionWrapper:
-    def __init__(self, function, input_keys, output_keys):
-        self.function = function
-        self.input_keys = input_keys
-        self.output_keys = output_keys
-
-    def __call__(self, inputs, train=True):
-        inputs['keras_learning_phase'] = int(train)
-        ins = [inputs[n] for n in self.input_keys if n in inputs]
-        outs = self.function(ins)
-        return dict(zip(self.output_keys, outs))

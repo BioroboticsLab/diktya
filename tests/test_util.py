@@ -13,68 +13,12 @@
 # limitations under the License.
 
 import numpy as np
-from beras.util import collect_layers, sequential, concat
+from beras.util import sequential, concat
 
 from keras.layers.core import Dense
-from keras.engine.topology import Input, merge
+from keras.engine.topology import Input
 from keras.engine.training import collect_trainable_weights
 from keras.models import Model
-import pytest
-
-
-def test_collect_layers():
-    input = Input(shape=(5,))
-    layer_a = Dense(20)
-    layer_b = Dense(20)
-    layer_c = Dense(20)
-    layer_d = Dense(20)
-    a = layer_a(input)
-    b = layer_b(a)
-    c = layer_c(b)
-    d = layer_d(c)
-
-    layers = collect_layers([b], [d])
-    assert layer_c in layers
-    assert layer_d in layers
-    assert len(layers) == 2
-
-    layers = collect_layers([input], [c])
-    assert layer_a in layers
-    assert layer_b in layers
-    assert layer_c in layers
-    assert len(layers) == 3
-
-
-def test_collect_layers_mimo():
-    x = Input(shape=(5,))
-    y = Input(shape=(5,))
-    layer_a = Dense(20)
-    layer_b = Dense(20)
-    layer_c = Dense(20)
-    layer_d = Dense(20)
-    layer_e = Dense(20)
-    a = layer_a(x)
-    b = layer_b(y)
-    m = merge([a, b])
-    c = layer_c(m)
-    d = layer_d(m)
-    e = layer_e(d)
-
-    layers = collect_layers([x, y], [c, e])
-    # pytest.set_trace()
-    assert layer_a in layers
-    assert layer_b in layers
-    assert m._keras_history[0] in layers
-    assert layer_c in layers
-    assert layer_d in layers
-    assert layer_e in layers
-
-    layers = collect_layers([x, y], [e])
-    assert layer_c not in layers
-
-    # missing inputs are detected
-    with pytest.raises(Exception):
-        layers = collect_layers([x], [c, e])
 
 
 def test_concat():
