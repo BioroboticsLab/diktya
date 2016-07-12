@@ -148,10 +148,12 @@ class HistoryPerBatch(Callback):
             self.history[k].append([])
 
     def on_batch_end(self, batch, logs={}):
-        for k, v in logs.items():
+        for k in self.params['metrics']:
+            if k not in logs:
+                continue
             if k not in self.history:
                 self.history[k] = [[]]
-            self.history[k][-1].append(v)
+            self.history[k][-1].append(float(logs[k]))
 
     def plot(self, fig=None, axes=None):
         if fig is None and axes is None:
@@ -159,11 +161,12 @@ class HistoryPerBatch(Callback):
         if axes is None:
             axes = fig.add_subplot(111)
 
-        for label, hist in self.history.items():
+        for label, epochs in self.history.items():
             means = []
-            for epoch in hist:
+            for epoch in epochs:
                 means.append(np.mean(epoch))
-            axes.plot(means, label=label)
+            means = np.array(means)
+            axes.plot(np.arange(len(means)), means, label=label)
         axes.set_xlabel('epoch')
         axes.set_ylabel('loss')
         return fig, axes
