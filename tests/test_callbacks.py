@@ -106,6 +106,9 @@ def test_automatic_lr_scheduler():
 
 def test_history_per_batch():
     hist = HistoryPerBatch()
+
+    hist.params = {}
+    hist.params['metrics'] = ['loss']
     hist.on_epoch_begin(0)
     losses = [[]]
     for i in range(5):
