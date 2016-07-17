@@ -1,15 +1,24 @@
 Welcome to diktyo's documentation!
 ========================================
 
-Contents:
 
 .. toctree::
-   :maxdepth: 2
+    :hidden:
+    :maxdepth: 2
 
-   api/callbacks
-   api/func_api_helpers
-   api/gan
-   api/layers/core
+    api/callbacks
+    api/func_api_helpers
+    api/gan
+    api/layers/core
+
+
+`diktyo` (Greek for networks) contains some complementary utilities
+for `theano <http://deeplearning.net/software/theano/>`_ and `keras <http://keras.io/>`_ .
+
+
+* Implementation of a :doc:`Generative Adversarial Network <api/gan>`.
+* Some :doc:`usefull helpers <api/func_api_helpers>` for the keras functional API .
+* :doc:`Callbacks <api/callbacks>` for learning rate scheduling and history recording.
 
 
 Indices and tables
