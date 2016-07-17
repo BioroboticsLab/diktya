@@ -19,7 +19,7 @@ import numpy as np
 import theano
 import theano.tensor as T
 
-from beras.filters import gaussian_filter_2d
+from diktyo.filters import gaussian_filter_2d
 
 
 def upsample(input, sigma=2/3):

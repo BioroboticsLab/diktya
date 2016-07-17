@@ -30,9 +30,9 @@ import math
 import pytest
 import numpy as np
 
-from beras.gan import GAN
-from beras.layers.core import Split
-from beras.util import sequential, concat
+from diktyo.gan import GAN
+from diktyo.layers.core import Split
+from diktyo.util import sequential, concat
 
 
 def sample_circle(nb_samples):

@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 from keras.callbacks import Callback
 import keras.backend as K
 
-from beras.transform import tile
+from diktyo.transform import tile
 
 
 class VisualiseGAN(Callback):

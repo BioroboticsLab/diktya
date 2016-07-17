@@ -1,9 +1,8 @@
-import uuid
 from pip.req import parse_requirements
 from distutils.core import setup
 
-setup(name='beras',
-      version='0.0.1',
+setup(name='diktyo',
+      version='0.1.0',
       description='Extensions of keras',
       author='Leon Sixt',
       author_email='github@leon-sixt.de',
@@ -16,6 +15,6 @@ setup(name='beras',
             "dotmap>=1.1.2",
             "h5py"
       ],
-      packages=['beras',
-                'beras.layers']
+      packages=['diktyo',
+                'diktyo.layers']
       )

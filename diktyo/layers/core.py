@@ -15,7 +15,7 @@ from keras.layers.core import Layer, InputSpec
 import keras.backend as K
 import theano.tensor as T
 import theano
-from beras.regularizers import ActivityInBoundsRegularizer
+from diktyo.regularizers import ActivityInBoundsRegularizer
 
 
 class Split(Layer):

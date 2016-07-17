@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from beras.layers.core import Swap, Split, SplitAt, LinearInBounds
+from diktyo.layers.core import Swap, Split, SplitAt, LinearInBounds
 import numpy as np
 import theano
 from keras.models import Sequential, Model

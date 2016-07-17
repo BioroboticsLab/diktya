@@ -21,7 +21,7 @@ from keras.layers.core import Dense, Flatten, Dropout
 from keras.engine.topology import Input
 from keras.models import Sequential, Model
 import keras.backend as K
-from beras.layers.attention import RotationTransformer
+from diktyo.layers.attention import RotationTransformer
 import numpy as np
 
 

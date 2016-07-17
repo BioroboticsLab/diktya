@@ -18,7 +18,7 @@ import skimage
 import skimage.transform
 import theano
 import numpy as np
-from beras.transform import upsample, tile, resize_interpolate
+from diktyo.transform import upsample, tile, resize_interpolate
 import matplotlib.pyplot as plt
 import skimage.data
 import skimage.color
