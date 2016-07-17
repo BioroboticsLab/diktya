@@ -22,17 +22,19 @@ from keras.callbacks import Callback
 import keras.backend as K
 
 from diktyo.transform import tile
+from scipy.misc import imsave
 
 
 class VisualiseGAN(Callback):
-    def __init__(self, nb_samples, output_dir, show=False, preprocess=None):
+    def __init__(self, nb_samples, output_dir=None, show=False, preprocess=None):
         self.nb_samples = nb_samples
         self.output_dir = output_dir
         self.show = show
         self.preprocess = preprocess
         if self.preprocess is None:
             self.preprocess = lambda x: x
-        os.makedirs(self.output_dir, exist_ok=True)
+        if self.output_dir is not None:
+            os.makedirs(self.output_dir, exist_ok=True)
 
     def should_visualise(self, i):
         return i % 50 == 0 or \
@@ -49,17 +51,24 @@ class VisualiseGAN(Callback):
         fake = self.model.generate({'z': self.z})
         fake = self.preprocess(fake)
         tiled_fakes = tile(fake)
-        plt.imshow(tiled_fakes[0], cmap='gray')
-        plt.grid(False)
-        if fname is not None:
-            plt.savefig(fname, dpi=200)
         if self.show:
+            if tiled_fakes.shape[0] == 1:
+                plt.imshow(tiled_fakes[0], cmap='gray')
+            else:
+                plt.imshow(tiled_fakes)
+            plt.grid(False)
+            plt.axes('off')
             plt.show()
+        if fname is not None:
+            imsave(fname, np.moveaxis(tiled_fakes, 0, -1))
 
     def on_epoch_end(self, epoch, logs={}):
         epoch = epoch
         if self.should_visualise(epoch):
-            fname = os.path.join(self.output_dir, "{:05d}.png".format(epoch))
+            if self.output_dir is not None:
+                fname = os.path.join(self.output_dir, "{:05d}.png".format(epoch))
+            else:
+                fname = None
             self(fname)
             plt.clf()
 
