@@ -95,6 +95,13 @@ class SaveModels(Callback):
 
 
 class LearningRateScheduler(Callback):
+    """
+    Learning rate scheduler
+
+    Args:
+       optimizer (keras Optimizer): schedule the learning rate of this optimizer
+       schedule
+    """
     def __init__(self, optimizer, schedule):
         assert hasattr(optimizer, 'lr')
         self.optimizer = optimizer
@@ -149,6 +156,13 @@ class AutomaticLearningRateScheduler(Callback):
 
 
 class HistoryPerBatch(Callback):
+    """
+    Saves the metrics of every batch.
+
+    Attributes:
+        history: history of every batch. Use ``history[metric_name][epoch][batch]``
+            to index.
+    """
     def __init__(self):
         self.history = {}
 
@@ -165,6 +179,16 @@ class HistoryPerBatch(Callback):
             self.history[k][-1].append(float(logs[k]))
 
     def plot(self, fig=None, axes=None):
+        """
+        Plots the losses and variance for every epoch.
+
+        Args:
+            fig: matplotlib figure
+            axes: matplotlib axes
+
+        Returns:
+            A tuple of fig, axes
+        """
         if fig is None and axes is None:
             fig = plt.figure()
         if axes is None:
