@@ -128,7 +128,6 @@ def sequential(layers, ns=None, trainable=True):
                 yield x
 
     for i, l in enumerate(flatten(layers)):
-        l.name.split('_')
         if ns is not None:
             if '.' not in l.name:
                 name = re.sub('_\d+$', '', l.name)

@@ -9,6 +9,7 @@ Contents:
    api/callbacks
    api/func_api_helpers
    api/gan
+   api/layers/core
 
 
 Indices and tables

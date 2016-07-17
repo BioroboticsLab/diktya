@@ -15,12 +15,20 @@ from keras.layers.core import Layer, InputSpec
 import keras.backend as K
 import theano.tensor as T
 import theano
-from diktyo.regularizers import ActivityInBoundsRegularizer
 
 
-class Split(Layer):
+
+class Subtensor(Layer):
+    """
+    Selects only a part of the input.
+
+    Args:
+        start (int): Start index
+        stop (int): Stop index
+        axis (int): Index along this axis
+    """
     def __init__(self, start, stop, step=1, axis=0, **kwargs):
-        super(Split, self).__init__(**kwargs)
+        super(Subtensor, self).__init__(**kwargs)
         self.start = start
         self.stop = stop
         self.step = step
@@ -130,11 +138,27 @@ class Switch(Layer):
 
 
 class ZeroGradient(Layer):
+    """
+    Consider the gradient allways zero.
+    Wraps the ``theano.gradient.zero_grad`` function.
+    """
     def call(self, x, mask=None):
         return theano.gradient.zero_grad(x)
 
 
-class LinearInBounds(Layer):
+class InBounds(Layer):
+    """
+    Between ``low`` and ``high`` this layer is the identity.
+    If the value is not in bounds a regularization loss is added to
+    the model.
+
+    Args:
+        low: lower bound
+        high: upper bound
+        clip: Clip output if out of bounds
+        weight: The regularization loss is multiplied by this
+
+    """
     def __init__(self, low=-1, high=1, clip=False, weight=1, **kwargs):
         self.low = low
         self.high = high
