@@ -15,10 +15,13 @@
 
 from keras.regularizers import Regularizer
 import keras.backend as K
+import warnings
 
 
 class ActivityInBoundsRegularizer(Regularizer):
     def __init__(self, low=-1, high=1, weight=10):
+        warnings.warn("ActivityInBoundsRegularizer is deprecated. "
+                      "Use the LinearInBounds layer.")
         self.low = low
         self.high = high
         self.weight = weight
@@ -45,6 +48,8 @@ class ActivityInBoundsRegularizer(Regularizer):
 
 class SumOfActivityBelowRegularizer(Regularizer):
     def __init__(self, max_sum):
+        warnings.warn("SumOfActivityBelowRegularizer is deprecated.")
+        # TODO: Write a replacement that uses compute_loss
         self.max_sum = K.variable(max_sum)
         self.uses_learning_phase = True
 
