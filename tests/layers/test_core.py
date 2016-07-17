@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from diktyo.layers.core import Swap, Split, SplitAt, LinearInBounds
+from diktyo.layers.core import Swap, Subtensor, SplitAt, InBounds
 import numpy as np
 import theano
 from keras.models import Sequential, Model
@@ -30,8 +30,8 @@ def test_swap():
     assert (output == swaped).all()
 
 
-def test_split():
-    layer = Split(0, 1)
+def test_subtensor():
+    layer = Subtensor(0, 1)
     shape = (4, 32)
     layer.build(shape)
     arr = np.random.sample(shape).astype(np.float32)
@@ -56,8 +56,8 @@ def test_split_at():
     assert (back == arr[bound:]).all()
 
 
-def test_linear_in_bounds_clip():
-    layer = LinearInBounds(-1, 1, clip=True)
+def test_in_bounds_clip():
+    layer = InBounds(-1, 1, clip=True)
     shape = (1, 1)
     layer.build(shape)
     arr = np.array([[0]], dtype=np.float32)
@@ -73,9 +73,9 @@ def test_linear_in_bounds_clip():
     assert float(output) == 1.
 
 
-def test_linear_in_bounds_regularizer():
+def test_in_bounds_regularizer():
     model = Sequential()
-    model.add(LinearInBounds(-1, 1, clip=True, input_shape=(1,)))
+    model.add(InBounds(-1, 1, clip=True, input_shape=(1,)))
     model.compile('adam', 'mse')
     loss = model.train_on_batch(np.array([[0]]), np.array([[0]]))
     assert float(loss) == 0
