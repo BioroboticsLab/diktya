@@ -63,7 +63,7 @@ class Plotter(keras.callbacks.Callback):
         import matplotlib.pyplot as plt
         ys = []
         for i in range(32):
-            ys.append(self.model.generate())
+            ys.append(self.model.generate(nb_samples=64))
         Y = np.concatenate(ys)
         fig = plt.figure()
         plt.ylim(-1, 1.5)
@@ -148,53 +148,3 @@ def test_gan_utility_funcs(simple_gan: GAN):
     diff = np.stack([neighbors[0]]*len(neighbors)) - neighbors
     assert np.abs(diff).mean() < 0.1
 
-
-def test_gan_save_weights(tmpdir):
-    z_shape = (1, 8, 8)
-    gen_cond = Input(shape=(1, 8, 8), name='gen_cond')
-
-    def get_generator():
-        z = Input(shape=z_shape, name='z')
-
-        inputs = [z, gen_cond]
-        gen_input = merge(inputs, mode='concat', concat_axis=1)
-        gen_output = Convolution2D(10, 2, 2, activation='relu',
-                                   border_mode='same')(gen_input)
-        g = Model(inputs, gen_output)
-        g.compile('adam', 'binary_crossentropy')
-        return g
-
-    def get_discriminator():
-        dis_input = Input(z_shape, name='data')
-        dis_conv = Convolution2D(5, 2, 2, activation='relu')(dis_input)
-        dis_flatten = Flatten()(dis_conv)
-        dis = Dense(1, activation='sigmoid')(dis_flatten)
-        d =  Model(dis_input, dis)
-        d.compile('adam', 'binary_crossentropy')
-        return d
-
-    gan = GAN(get_generator(), get_discriminator())
-    gan.save_weights(str(tmpdir + "/{}.hdf5"))
-
-    gan_load = GAN(get_generator(), get_discriminator())
-
-    all_equal = True
-    for s, l in zip(gan.g.layers + gan.d.layers, gan_load.g.layers + gan_load.d.layers):
-        if not all([
-            (sw.get_value() == lw.get_value()).all()
-            for sw, lw in zip(s.trainable_weights, l.trainable_weights)
-        ]):
-            all_equal = False
-    assert not all_equal
-
-    gan_load.g.load_weights(str(tmpdir.join("generator.hdf5")))
-
-    for s, l in zip(gan.g.layers, gan_load.g.layers):
-        for sw, lw in zip(s.trainable_weights, l.trainable_weights):
-            assert (sw.get_value() == lw.get_value()).all()
-
-    gan_load.d.load_weights(str(tmpdir.join("discriminator.hdf5")))
-
-    for s, l in zip(gan.d.layers, gan_load.d.layers):
-        for sw, lw in zip(s.trainable_weights, l.trainable_weights):
-            assert (sw.get_value() == lw.get_value()).all()

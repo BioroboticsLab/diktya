@@ -75,7 +75,7 @@ class GAN(AbstractModel):
         self.d = discriminator
         assert hasattr(self.d, 'optimizer'), "Did you forgot to call model.compile(...)?"
 
-        realness = name_tensor(self.d(self.g(self.g.inputs)), 'realness')
+        realness = name_tensor(self.d(self.g(self.g.inputs)), 'g_loss')
         self.fit_g = Model(self.g.inputs, realness)
         with trainable(self.d, False):
             self.fit_g.compile(keras_copy(self.g.optimizer), self.g.loss)
