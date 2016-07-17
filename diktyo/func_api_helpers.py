@@ -33,6 +33,7 @@ def trainable(model, trainable):
         trainable (bool): set layer.traiable to this value
 
     Example:
+
     .. code:: python
 
         model = Model(x, y)
