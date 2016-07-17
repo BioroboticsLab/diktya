@@ -15,6 +15,8 @@ setup(name='diktyo',
             "dotmap>=1.1.2",
             "h5py"
       ],
-      packages=['diktyo',
-                'diktyo.layers']
-      )
+      packages=[
+          'diktyo',
+          'diktyo.layers',
+          'diktyo.plot',
+      ])

@@ -28,8 +28,3 @@ def visualise_tiles(images, show=True):
     plt.imshow(tiled_fakes[0], cmap='gray')
     if show:
         plt.show()
-
-
-def save_image(data, fname, cmap='gray'):
-    from scipy.misc import imsave
-    imsave(fname, data, format='png')
