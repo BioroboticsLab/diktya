@@ -13,26 +13,21 @@
 # limitations under the License.
 
 
-from conftest import visual_debug, TEST_OUTPUT_DIR
+from conftest import TEST_OUTPUT_DIR
 import os
 import keras
-import theano
 import keras.initializations
-import keras.backend as K
-from keras.layers.convolutional import Convolution2D
-from keras.layers.core import Dense, Flatten
+from keras.layers.core import Dense
 from keras.layers.advanced_activations import LeakyReLU
 from keras.optimizers import Adam
-from keras.engine.topology import Input, merge, Container
+from keras.engine.topology import Input
 from keras.engine.training import Model
-from keras.utils.layer_utils import layer_from_config
 import math
 import pytest
 import numpy as np
 
 from diktyo.gan import GAN
-from diktyo.layers.core import Split
-from diktyo.util import sequential, concat
+from diktyo.func_api_helpers import sequential
 
 
 def sample_circle(nb_samples):

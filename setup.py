@@ -19,4 +19,6 @@ setup(name='diktyo',
           'diktyo',
           'diktyo.layers',
           'diktyo.plot',
+          'diktyo.numpy',
+          'diktyo.theano',
       ])

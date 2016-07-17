@@ -15,7 +15,7 @@ import skimage
 import skimage.transform
 import theano
 import numpy as np
-from diktyo.filters import sobel, gaussian_filter_2d, \
+from diktyo.theano.image_filters import sobel, gaussian_filter_2d, \
     gaussian_filter_2d_variable_sigma, gaussian_kernel_1d
 import matplotlib.pyplot as plt
 import skimage.data

@@ -14,25 +14,10 @@
 import random
 
 from colorsys import hsv_to_rgb
-import skimage
-import skimage.transform
-import theano
 import numpy as np
-from diktyo.transform import upsample, tile, resize_interpolate
+from diktyo.numpy.utils import tile
 import matplotlib.pyplot as plt
-import skimage.data
-import skimage.color
 from conftest import plt_save_and_maybe_show
-
-
-def test_upsample(astronaut):
-    x = theano.shared(astronaut[np.newaxis, np.newaxis])
-    x_up = upsample(resize_interpolate(x, scale=0.5)).eval()
-    plt.subplot(121)
-    plt.imshow(x.get_value()[0, 0, :])
-    plt.subplot(122)
-    plt.imshow(x_up[0, 0, :])
-    plt_save_and_maybe_show("test_upsample.png")
 
 
 def test_tile():
