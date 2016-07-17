@@ -135,29 +135,34 @@ class ZeroGradient(Layer):
 
 
 class LinearInBounds(Layer):
-    def __init__(self, low=-1, high=1, clip=False, **kwargs):
-        self.activity_in_bounds = ActivityInBoundsRegularizer(low, high)
+    def __init__(self, low=-1, high=1, clip=False, weight=1, **kwargs):
+        self.low = low
+        self.high = high
         self.clip = clip
+        self.weight = weight
+        self.uses_learning_phase = True
         super().__init__(**kwargs)
 
     def build(self, input_shape):
         self.input_spec = [InputSpec(dtype=K.floatx(),
                                      shape=(None,) + input_shape[1:])]
-        self.activity_in_bounds.set_layer(self)
-        self.regularizers = [self.activity_in_bounds]
         super().build(input_shape)
+
+    def compute_loss(self, input, output, input_mask=None, output_mask=None):
+        l = K.switch(input < self.low, K.abs(input - self.low), 0)
+        h = K.switch(input > self.high, K.abs(input - self.high), 0)
+        return K.in_train_phase(self.weight*K.mean(h + l), 0)
 
     def call(self, x, mask=None):
         if self.clip:
-            return T.clip(x, self.activity_in_bounds.low,
-                          self.activity_in_bounds.high)
+            return T.clip(x, self.low, self.high)
         else:
             return x
 
     def get_config(self):
         config = {
-            'low': self.activity_in_bounds.low,
-            'high': self.activity_in_bounds.high,
+            'low': self.low,
+            'high': self.high,
             'clip': self.clip,
         }
         base_config = super().get_config()
