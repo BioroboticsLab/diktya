@@ -13,6 +13,7 @@ install:
   - conda info -a
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib pytest h5py pillow scikit-image pandas
   - source activate test-environment
+  - pip install seaborn
   - pip install git+https://github.com/Theano/Theano.git#egg=theano
   - pip install git+https://github.com/berleon/keras.git@losses#egg=keras
   - pip install git+https://github.com/EderSantana/seya.git@50aafed580adf1d9cd86ebe8ae96432efa079667#egg=seya
