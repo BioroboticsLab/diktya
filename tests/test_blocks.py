@@ -13,30 +13,30 @@
 # limitations under the License.
 #
 
-from diktya.blocks import conv2d, resnet
+from diktya.blocks import conv2d_block, resnet
 from diktya.func_api_helpers import sequential
 from keras.layers import Input
 from keras.engine.training import Model
 
 
-def test_conv():
+def test_conv2d_block():
     x = Input(shape=(1, 8, 8))
     y = sequential(
-        conv2d(4)
+        conv2d_block(4)
     )(x)
     model = Model(x, y)
     assert model.get_output_shape_for((None, 1, 8, 8)) == (None, 4, 8, 8)
 
     x = Input(shape=(1, 8, 8))
     y = sequential(
-        conv2d(4, pooling='avg')
+        conv2d_block(4, pooling='avg')
     )(x)
     model = Model(x, y)
     assert model.get_output_shape_for((None, 1, 8, 8)) == (None, 4, 4, 4)
 
     x = Input(shape=(1, 8, 8))
     y = sequential(
-        conv2d(4, up=True)
+        conv2d_block(4, up=True)
     )(x)
     model = Model(x, y)
     assert model.get_output_shape_for((None, 1, 8, 8)) == (None, 4, 16, 16)
@@ -46,7 +46,7 @@ def test_resnet():
     n = 4
     x = Input(shape=(1, 8, 8))
     y = sequential([
-        conv2d(n),
+        conv2d_block(n),
         resnet(n)
     ])(x)
     model = Model(x, y)

@@ -40,8 +40,8 @@ def get_activation(activation):
         raise Exception("Did not understand activation: {}".format(activation))
 
 
-def conv2d(n, filters=3, depth=1, border='same', activation='relu',
-           batchnorm=True, pooling=None, up=False):
+def conv2d_block(n, filters=3, depth=1, border='same', activation='relu',
+                 batchnorm=True, pooling=None, up=False):
     """
     2D-Convolutional block consisting of possible muliple repetitions of ``Convolution2D``,
     ``BatchNormalization``, and ``Activation`` layers and can be finished by
@@ -118,6 +118,6 @@ def resnet(n, filters=3, activation='relu'):
         A function that takes a keras tensor as input and runs the resnet block
     """
     def wrapper(x):
-        f = sequential(conv2d(n, filters, depth=2, activation=activation))
+        f = sequential(conv2d_block(n, filters, depth=2, activation=activation))
         return merge([x, f(x)], mode='sum')
     return wrapper
