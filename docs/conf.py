@@ -346,5 +346,5 @@ def linkcode_resolve(domain, info):
     p = subprocess.Popen(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE)
     git_rev, err = p.communicate()
     git_rev = git_rev.decode('utf-8').rstrip('\n')
-    return "http://github.com/BioroboticsLab/diktya/blob/{}/diktya/{}{}".format(
+    return "https://github.com/BioroboticsLab/diktya/blob/{}/diktya/{}{}".format(
        git_rev, fn, linespec)
