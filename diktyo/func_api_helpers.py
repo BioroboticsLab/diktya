@@ -26,7 +26,7 @@ def trainable(model, trainable):
     .. warning::
 
        Be aware, that the keras ``Model.compile`` method is lazy.
-       You might want to call ``Model._make_train_function`` force a compilation.
+       You might want to call ``Model._make_train_function`` to force a compilation.
 
     Args:
         model: keras model
@@ -68,12 +68,14 @@ def sequential(layers, ns=None, trainable=True):
 
     Args:
         layers (list): Can be a arbitrary nested list of layers.
-            The layers will be called sequentially.
+            The layers will be called sequentially. Can contain ``None``'s
         ns (optional str): Namespace prefix of the layers
-        trainable (optional bool): set the layer's trainable attribute to this value
+        trainable (optional bool): set the layer's trainable attribute to this value.
+
     Returns:
         A function that takes a tensor as input, applies all the layers, and
         returns the output tensor.
+
     **Simple example:**
 
     Call a list of layers.
@@ -123,9 +125,11 @@ def sequential(layers, ns=None, trainable=True):
         for x in xs:
             try:
                 for f in flatten(x):
-                    yield f
+                    if f is not None:
+                        yield f
             except TypeError:
-                yield x
+                if x is not None:
+                    yield x
 
     for i, l in enumerate(flatten(layers)):
         if ns is not None:
