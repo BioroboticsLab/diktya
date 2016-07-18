@@ -16,7 +16,7 @@
 import numpy as np
 
 from conftest import TEST_OUTPUT_DIR
-from diktyo.callbacks import SaveModels, LearningRateScheduler, \
+from diktya.callbacks import SaveModels, LearningRateScheduler, \
     AutomaticLearningRateScheduler, HistoryPerBatch
 from keras.models import Sequential
 from keras.layers.core import Dense

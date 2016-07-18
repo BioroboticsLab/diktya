@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from diktyo.layers.core import Swap, Subtensor, SplitAt, InBounds
+from diktya.layers.core import Swap, Subtensor, SplitAt, InBounds
 import numpy as np
 import theano
 from keras.models import Sequential, Model

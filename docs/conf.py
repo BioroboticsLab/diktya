@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# diktyo documentation build configuration file, created by
+# diktya documentation build configuration file, created by
 # sphinx-quickstart on Mon Jun 20 14:45:33 2016.
 #
 # This file is execfile()d with the current directory set to its
@@ -54,7 +54,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'diktyo'
+project = u'diktya'
 copyright = u'2016, Benjamin Wild, Leon Sixt'
 author = u'Benjamin Wild, Leon Sixt'
 
@@ -208,7 +208,7 @@ html_static_path = ['_static']
 #html_search_scorer = 'scorer.js'
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'diktyodoc'
+htmlhelp_basename = 'diktyadoc'
 
 # -- Options for LaTeX output ---------------------------------------------
 
@@ -230,7 +230,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'diktyo.tex', u'diktyo Documentation',
+    (master_doc, 'diktya.tex', u'diktya Documentation',
      u'Leon Sixt', 'manual'),
 ]
 
@@ -260,7 +260,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'diktyo', u'diktyo Documentation',
+    (master_doc, 'diktya', u'diktya Documentation',
      [author], 1)
 ]
 
@@ -274,8 +274,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'diktyo', u'diktyo Documentation',
-     author, 'diktyo', 'One line description of project.',
+    (master_doc, 'diktya', u'diktya Documentation',
+     author, 'diktya', 'One line description of project.',
      'Miscellaneous'),
 ]
 
@@ -306,7 +306,7 @@ def linkcode_resolve(domain, info):
     """
     import inspect
     from os.path import relpath, dirname
-    import diktyo
+    import diktya
     import subprocess
     if domain != 'py':
         return None
@@ -342,9 +342,9 @@ def linkcode_resolve(domain, info):
     else:
         linespec = ""
 
-    fn = relpath(fn, start=dirname(diktyo.__file__))
+    fn = relpath(fn, start=dirname(diktya.__file__))
     p = subprocess.Popen(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE)
     git_rev, err = p.communicate()
     git_rev = git_rev.decode('utf-8').rstrip('\n')
-    return "http://github.com/BioroboticsLab/diktyo/blob/{}/diktyo/{}{}".format(
+    return "http://github.com/BioroboticsLab/diktya/blob/{}/diktya/{}{}".format(
        git_rev, fn, linespec)

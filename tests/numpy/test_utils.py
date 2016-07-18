@@ -15,7 +15,7 @@ import random
 
 from colorsys import hsv_to_rgb
 import numpy as np
-from diktyo.numpy.utils import tile
+from diktya.numpy.utils import tile
 import matplotlib.pyplot as plt
 from conftest import plt_save_and_maybe_show
 

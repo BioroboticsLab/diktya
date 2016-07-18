@@ -1,4 +1,4 @@
-Welcome to diktyo's documentation!
+Welcome to diktya's documentation!
 ========================================
 
 
@@ -13,7 +13,7 @@ Welcome to diktyo's documentation!
     api/layers/core
 
 
-`diktyo` (Greek for networks) contains some complementary utilities
+`diktya` (Greek for networks) contains some complementary utilities
 for `theano <http://deeplearning.net/software/theano/>`_ and `keras <http://keras.io/>`_ .
 
 

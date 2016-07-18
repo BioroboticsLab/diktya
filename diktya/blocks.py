@@ -18,7 +18,7 @@
 
     The functions in this module are espacially usefull together
     with the :py:func:`sequential
-    <diktyo.func_api_helpers.sequential>` function.
+    <diktya.func_api_helpers.sequential>` function.
 """
 
 
@@ -28,7 +28,7 @@ from keras.layers.normalization import BatchNormalization
 from keras.layers.convolutional import Convolution2D, UpSampling2D
 from keras.layers.pooling import MaxPooling2D, AveragePooling2D
 
-from diktyo.func_api_helpers import sequential
+from diktya.func_api_helpers import sequential
 
 
 def get_activation(activation):

@@ -13,8 +13,8 @@
 # limitations under the License.
 #
 
-from diktyo.blocks import conv2d, resnet
-from diktyo.func_api_helpers import sequential
+from diktya.blocks import conv2d, resnet
+from diktya.func_api_helpers import sequential
 from keras.layers import Input
 from keras.engine.training import Model
 

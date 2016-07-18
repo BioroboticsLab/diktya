@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import numpy as np
-from diktyo.func_api_helpers import sequential, concat
+from diktya.func_api_helpers import sequential, concat
 
 from keras.layers.core import Dense
 from keras.engine.topology import Input

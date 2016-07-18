@@ -17,7 +17,7 @@ import numpy as np
 import theano
 import theano.tensor as T
 
-from diktyo.theano.image_filters import gaussian_filter_2d
+from diktya.theano.image_filters import gaussian_filter_2d
 
 
 def upsample(input, sigma=2/3):

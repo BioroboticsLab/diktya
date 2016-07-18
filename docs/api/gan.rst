@@ -2,6 +2,6 @@ GAN
 ===
 
 
-.. automodule:: diktyo.gan
+.. automodule:: diktya.gan
     :members:
     :show-inheritance:

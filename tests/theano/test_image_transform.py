@@ -16,7 +16,7 @@ import random
 from colorsys import hsv_to_rgb
 import theano
 import numpy as np
-from diktyo.theano.image_transform import upsample, resize_interpolate
+from diktya.theano.image_transform import upsample, resize_interpolate
 import matplotlib.pyplot as plt
 from conftest import plt_save_and_maybe_show
 

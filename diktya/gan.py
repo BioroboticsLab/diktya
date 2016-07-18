@@ -14,8 +14,8 @@
 
 import numpy as np
 from keras.engine.training import Model
-from diktyo.models import AbstractModel
-from diktyo.func_api_helpers import get_layer, keras_copy, trainable, name_tensor
+from diktya.models import AbstractModel
+from diktya.func_api_helpers import get_layer, keras_copy, trainable, name_tensor
 
 
 def _listify(x):

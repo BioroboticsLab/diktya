@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 from keras.callbacks import Callback
 import keras.backend as K
 
-from diktyo.numpy.utils import tile
+from diktya.numpy.utils import tile
 from scipy.misc import imsave
 
 

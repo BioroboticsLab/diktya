@@ -26,8 +26,8 @@ import math
 import pytest
 import numpy as np
 
-from diktyo.gan import GAN
-from diktyo.func_api_helpers import sequential
+from diktya.gan import GAN
+from diktya.func_api_helpers import sequential
 
 
 def sample_circle(nb_samples):

@@ -14,7 +14,7 @@
 
 import theano
 import theano.tensor as T
-from diktyo.theano.border import add_border
+from diktya.theano.border import add_border
 
 from keras.backend.common import floatx, cast_to_floatx
 import numpy as np

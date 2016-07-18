@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from diktyo.transform import tile, zip_tile
+from diktya.transform import tile, zip_tile
 import matplotlib.pyplot as plt
 
 

@@ -1,7 +1,7 @@
 from pip.req import parse_requirements
 from distutils.core import setup
 
-setup(name='diktyo',
+setup(name='diktya',
       version='0.1.0',
       description='Extensions of keras',
       author='Leon Sixt',
@@ -16,9 +16,9 @@ setup(name='diktyo',
             "h5py"
       ],
       packages=[
-          'diktyo',
-          'diktyo.layers',
-          'diktyo.plot',
-          'diktyo.numpy',
-          'diktyo.theano',
+          'diktya',
+          'diktya.layers',
+          'diktya.plot',
+          'diktya.numpy',
+          'diktya.theano',
       ])
