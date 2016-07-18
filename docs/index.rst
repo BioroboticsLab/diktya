@@ -7,8 +7,9 @@ Welcome to diktyo's documentation!
     :maxdepth: 2
 
     api/callbacks
-    api/func_api_helpers
     api/gan
+    api/func_api_helpers
+    api/blocks
     api/layers/core
 
 
