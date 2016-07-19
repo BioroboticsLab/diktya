@@ -1,6 +1,6 @@
 
 
-from pipeline.distributions import Bernoulli, Zeros, Constant, DistributionCollection, \
+from diktya.distributions import Bernoulli, Zeros, Constant, DistributionCollection, \
     Normalization, SubtDivide, UnitIntervalTo, SinCosAngleNorm, Normal, TruncNormal, Uniform, \
     load_from_json, CombineNormalization
 import numpy as np
@@ -10,11 +10,11 @@ def test_distribution_collection_dtype():
     dists = DistributionCollection({'const': (Constant(5), 2), 'bern': (Bernoulli(), 5)})
     bs = 10
     zeros = np.zeros((bs,), dtype=dists.dtype)
-    for name, nb_elems in dists._nb_elems.items():
+    for name, nb_elems in dists.nb_elems.items():
         assert len(zeros[name][0]) == nb_elems
 
     zeros = np.zeros((bs,), dtype=dists.norm_dtype)
-    for name, nb_elems in dists._nb_elems.items():
+    for name, nb_elems in dists.nb_elems.items():
         assert len(zeros[name][0]) == nb_elems
 
 
