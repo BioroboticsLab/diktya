@@ -1,5 +1,5 @@
-GAN
-===
+diktya.gan
+==========
 
 
 .. automodule:: diktya.gan

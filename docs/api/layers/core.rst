@@ -1,5 +1,5 @@
-Core Layers
-===========
+diktya.layers.core
+==================
 
 
 .. automodule:: diktya.layers.core

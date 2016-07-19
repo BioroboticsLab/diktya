@@ -1,5 +1,5 @@
-Network Building Blocks
-=======================
+diktya.blocks
+=============
 
 
 .. automodule:: diktya.blocks

@@ -298,6 +298,7 @@ intersphinx_mapping = {
 }
 
 autodoc_member_order = 'bysource'
+add_module_names = False
 
 
 def linkcode_resolve(domain, info):

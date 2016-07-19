@@ -1,6 +1,6 @@
 
-Keras Functional Api Helper
-===========================
+diktya.func_api_helpers
+=======================
 
 
 .. automodule:: diktya.func_api_helpers

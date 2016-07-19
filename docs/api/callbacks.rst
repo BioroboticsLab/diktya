@@ -1,5 +1,5 @@
-Callbacks
-=========
+diktya.callbacks
+================
 
 
 .. automodule:: diktya.callbacks
