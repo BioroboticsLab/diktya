@@ -78,7 +78,7 @@ class ConstantNormalization(JsonConvertable):
         self.value = value
 
     def normalize(self, array):
-        return np.zeros_like(array)
+        return np.random.uniform(-1, 1, array.shape)
 
     def denormalize(self, array):
         return np.ones_like(array)*self.value
