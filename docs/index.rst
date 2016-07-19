@@ -10,6 +10,7 @@ Welcome to diktya's documentation!
     api/gan
     api/func_api_helpers
     api/blocks
+    api/distributions
     api/layers/core
 
 
