@@ -60,7 +60,7 @@ def test_normalizations_are_bijections():
 def check_dist_default_norm(dist, n=10000):
     arr = dist.sample((n,))
     norm_arr = dist.default_normalization().normalize(arr)
-    assert abs(norm_arr.mean()) <= 0.05
+    assert abs(norm_arr.mean()) <= 0.10
     assert norm_arr.std() < 1.5
 
 
@@ -99,8 +99,8 @@ def check_serialization_distribution(dist, n=100000):
 
     arr = dist.sample((n,))
     arr_loaded = loaded_dist.sample((n,))
-    assert abs(arr.mean() - arr_loaded.mean()) <= 0.05
-    assert abs(arr.std() - arr_loaded.std()) <= 0.05
+    assert abs(arr.mean() - arr_loaded.mean()) <= 0.10
+    assert abs(arr.std() - arr_loaded.std()) <= 0.10
 
 
 def test_constant_serialization():
@@ -173,5 +173,5 @@ def test_distribution_collection_serialization():
     arr = dists.sample(n)
     arr_loaded = dists_loaded.sample(n)
     for name in dists.names:
-        assert abs(arr[name].mean() - arr_loaded[name].mean()) <= 0.05
-        assert abs(arr[name].std() - arr_loaded[name].std()) <= 0.05
+        assert abs(arr[name].mean() - arr_loaded[name].mean()) <= 0.10
+        assert abs(arr[name].std() - arr_loaded[name].std()) <= 0.10
