@@ -134,7 +134,7 @@ def sequential(layers, ns=None, trainable=True):
     for i, l in enumerate(flatten(layers)):
         if ns is not None:
             if '.' not in l.name:
-                name = re.sub('_\d+$', '', l.name)
+                name = type(l).__name__.lower()
                 name = "{:02}_{}".format(i, name)
             l.name = ns + '.' + name
         l.trainable = trainable
