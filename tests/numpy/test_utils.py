@@ -15,6 +15,9 @@ import random
 
 from colorsys import hsv_to_rgb
 import numpy as np
+import pytest
+
+from diktya.numpy import image_save
 from diktya.numpy.utils import tile
 import matplotlib.pyplot as plt
 from conftest import plt_save_and_maybe_show
@@ -54,3 +57,18 @@ def test_tile():
     plt.imshow(h_w_rgb)
     plt_save_and_maybe_show("test_tile.png")
     plt.close(fig)
+
+
+def test_image_save(tmpdir):
+    x = np.random.random((1, 64, 64))
+    image_save(str(tmpdir.join("one_channel.png")), x)
+
+    x = np.random.random((3, 64, 64))
+    image_save(str(tmpdir.join("one_channel.png")), x)
+
+    x = np.random.random((64, 64))
+    image_save(str(tmpdir.join("one_channel.png")), x)
+
+    with pytest.raises(Exception):
+        x = np.random.random((100, 64, 64))
+        image_save(str(tmpdir.join("one_channel.png")), x)

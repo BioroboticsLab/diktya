@@ -16,7 +16,7 @@ import numpy as np
 
 from math import ceil
 from math import sqrt
-
+from scipy.misc import imsave
 
 def scipy_gaussian_filter_2d(x, sigma=2/3.):
     from scipy.ndimage.filters import gaussian_filter1d
@@ -68,4 +68,22 @@ def zip_tile(*arrs):
     tiled = tile(tiles, columns_must_be_multiple_of=len(arrs))
     assert len(tiled) == 1, "only grayscale image are supported"
     return tiled[0]
+
+
+def image_save(fname, img_array):
+    """
+    Saves the image ``img_array`` of shape ``(height, width)``,
+    ``(1, height, width)``, or ``(3, height, width)`` to ``fname``.
+    """
+    ndim = len(img_array.shape)
+    nb_channels = len(img_array)
+    if ndim == 3 and nb_channels == 1:
+        img = img_array[0]
+    elif ndim == 3 and nb_channels == 3:
+        img = np.moveaxis(img_array, 0, -1)
+    elif ndim == 2:
+        img = img_array
+    else:
+        raise Exception("Did not understand image shape: {}".format(img_array.shape))
+    imsave(fname, img)
 

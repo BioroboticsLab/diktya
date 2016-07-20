@@ -21,9 +21,8 @@ import matplotlib.pyplot as plt
 from keras.callbacks import Callback
 import keras.backend as K
 
-from diktya.numpy.utils import tile
+from diktya.numpy import tile, image_save
 from diktya.plot.tiles import visualise_tiles
-from scipy.misc import imsave
 
 
 class OnEpochEnd(Callback):
@@ -66,8 +65,7 @@ class VisualiseGAN(Callback):
             visualise_tiles(fake, show=False)
             plt.show()
         if fname is not None:
-            tiled_fakes = tile(fake)
-            imsave(fname, np.moveaxis(tiled_fakes, 0, -1))
+            image_save(fname, tile(fake))
 
     def on_epoch_end(self, epoch, logs={}):
         epoch = epoch
