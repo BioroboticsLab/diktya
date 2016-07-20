@@ -105,6 +105,10 @@ def test_metrics_names(simple_gan):
     assert simple_gan.metrics_names == ['g_loss', 'd_loss']
 
 
+def test_input_names(simple_gan):
+    assert simple_gan.input_names == ['z', 'data']
+
+
 def test_gan_learn_simple_distribution(simple_gan):
     gan = simple_gan
 
@@ -121,7 +125,7 @@ def test_gan_learn_simple_distribution(simple_gan):
         while True:
             X = dataset(bs)
             z = np.random.uniform(-1, 1, (bs, simple_gan_nb_z))
-            yield {'real': X, 'z': z}
+            yield {'data': X, 'z': z}
 
     X = dataset(5000)
     callbacks = [Plotter(X, TEST_OUTPUT_DIR + "/epoches_plot")]
@@ -142,4 +146,3 @@ def test_gan_utility_funcs(simple_gan: GAN):
 
     diff = np.stack([neighbors[0]]*len(neighbors)) - neighbors
     assert np.abs(diff).mean() < 0.1
-

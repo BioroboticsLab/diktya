@@ -13,9 +13,12 @@
 # limitations under the License.
 
 import numpy as np
-from keras.engine.training import Model
+from keras.engine.training import Model, collect_trainable_weights
+import keras.backend as K
+
 from diktya.models import AbstractModel
-from diktya.func_api_helpers import get_layer, keras_copy, trainable, name_tensor
+from diktya.func_api_helpers import get_layer, keras_copy, trainable, name_tensor, \
+    concat
 
 
 def _listify(x):
@@ -71,21 +74,66 @@ class GAN(AbstractModel):
     def __init__(self, generator: Model, discriminator: Model):
         self.g = generator
         assert hasattr(self.g, 'optimizer'), "Did you forgot to call model.compile(...)?"
+        self.g_optimizer = keras_copy(self.g.optimizer)
 
         self.d = discriminator
         assert hasattr(self.d, 'optimizer'), "Did you forgot to call model.compile(...)?"
-
-        realness = name_tensor(self.d(self.g(self.g.inputs)), 'g_loss')
-        self.fit_g = Model(self.g.inputs, realness)
-        with trainable(self.d, False):
-            self.fit_g.compile(keras_copy(self.g.optimizer), self.g.loss)
-            self.fit_g._make_train_function()
+        self.d_optimizer = keras_copy(self.d.optimizer)
 
         self.z = self.g.inputs[0]
         self.z_input_layer = get_layer(self.z)
         self.z_shape = self.z_input_layer.get_output_shape_at(0)
+        self._build()
 
-    def train_on_batch(self, inputs=None, generator_inputs=None, discriminator_inputs=None):
+    @property
+    def input_names(self):
+        input_names = self.g.input_names + self.d.input_names
+        unique_names = set(input_names)
+        return [n for n in input_names if n in unique_names]
+
+    def _build(self):
+        fake, _, _, g_additional_losses = self.g.run_internal_graph(self.g.inputs)
+
+        real = self.d.inputs[0]
+        data = concat([fake, real], axis=0)
+
+        realness, _, _, d_additional_losses = self.d.run_internal_graph(
+            [data] + self.d.inputs[1:])
+
+        nb_fakes = fake.shape[0]
+        fake_realness = realness[:nb_fakes]
+        real_realness = realness[nb_fakes:]
+        g_fake_realness = fake_realness[:nb_fakes // 2]
+        d_fake_realness = fake_realness[nb_fakes // 2:]
+
+        d_loss = K.mean(K.binary_crossentropy(real_realness, K.ones_like(real_realness)))
+        d_loss += K.mean(K.binary_crossentropy(d_fake_realness, K.zeros_like(real_realness)))
+        d_loss += sum([v for v in d_additional_losses.values()])
+        g_loss = K.mean(K.binary_crossentropy(g_fake_realness, K.ones_like(real_realness)))
+        g_loss += sum([v for v in g_additional_losses.values()])
+
+        inputs = {i.name: i for i in self.g.inputs + self.d.inputs}
+        inputs_list = []
+        for name in self.input_names:
+            inputs_list.append(inputs[name])
+
+        g_updates = self.g_optimizer.get_updates(
+            collect_trainable_weights(self.g), self.g.constraints, g_loss)
+        d_updates = self.d_optimizer.get_updates(
+            collect_trainable_weights(self.d), self.d.constraints, d_loss)
+
+        if self.uses_learning_phase:
+            lr_phase = [K.learning_phase()]
+        else:
+            lr_phase = []
+        self._train_function = K.function(inputs_list + lr_phase, [g_loss, d_loss],
+                                          updates=g_updates + d_updates)
+
+    @property
+    def uses_learning_phase(self):
+        return self.g.uses_learning_phase or self.d.uses_learning_phase
+
+    def train_on_batch(self, inputs):
         """
         Runs a single weight update on a single batch of data.  Updates both
         generator and discriminator.
@@ -108,30 +156,25 @@ class GAN(AbstractModel):
         """
         if type(inputs) is list:
             if len(inputs) == 1:
-                inputs = {'real': inputs}
+                inputs = {'data': inputs}
             if len(inputs) == 2:
-                inputs = {'real': inputs[0], 'z': inputs[1]}
+                inputs = {'data': inputs[0], 'z': inputs[1]}
         elif type(inputs) is np.ndarray:
-            inputs = {'real': inputs}
+            inputs = {'data': inputs}
 
-        if generator_inputs is None:
-            generator_inputs = {k: v for k, v in inputs.items() if k != 'real'}
-        if discriminator_inputs is None:
-            discriminator_inputs = {k: v for k, v in inputs.items() if k != 'z'}
-        if 'z' not in generator_inputs:
-            generator_inputs['z'] = self.random_z(len(discriminator_inputs['real']))
+        inputs['z'] = self.random_z(2*len(inputs['data']))
 
-        real = discriminator_inputs.pop('real')
-        fake = self.g.predict(generator_inputs)
-        g_loss = self.fit_g.train_on_batch(generator_inputs, np.ones((len(fake), 1)))
+        input_list = []
+        for name in self.input_names:
+            if name not in inputs:
+                raise Exception("No value for key {}. Got {}".format(name, inputs))
+            input_list.append(inputs[name])
 
-        discriminator_inputs['data'] = np.concatenate([fake, real])
-        d_target = np.concatenate([
-            np.zeros((len(fake), 1)),
-            np.ones((len(real), 1))
-        ])
-        d_loss = self.d.train_on_batch(discriminator_inputs, d_target)
-        return _listify(g_loss) + _listify(d_loss)
+        if self.uses_learning_phase:
+            lr_phase = [1.]
+        else:
+            lr_phase = []
+        return self._train_function(input_list + lr_phase)
 
     @property
     def metrics_names(self):
@@ -150,7 +193,9 @@ class GAN(AbstractModel):
         return g_metrics + d_metrics
 
     def fit_generator(self, generator, nb_batches_per_epoch,
-                      nb_epoch, batch_size=128, verbose=1, callbacks=[]):
+                      nb_epoch, batch_size=128, verbose=1,
+                      train_on_batch='train_on_batch',
+                      callbacks=[]):
         """
         Fits the generator and discriminator on data generated by a Python
         generator. The generator is not run in parallel as in keras.
@@ -167,10 +212,13 @@ class GAN(AbstractModel):
         """
         if callbacks is None:
             callbacks = []
+        if type(train_on_batch) is str:
+            func_name = train_on_batch
+            train_on_batch = lambda s, x: getattr(self, func_name)(x)
 
         def train(model, batch_index, batch_logs=None):
             ins = next(generator)
-            outs = self.train_on_batch(ins)
+            outs = train_on_batch(self, ins)
             for key, value in zip(self.metrics_names, outs):
                 batch_logs[key] = value
 
