@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from contextlib import contextmanager
 from keras.engine.topology import merge
 from keras.layers.core import Activation
-import re
+from keras.utils.layer_utils import layer_from_config
+
+from contextlib import contextmanager
+import h5py
+import json
 
 
 @contextmanager
@@ -193,3 +196,33 @@ def keras_copy(obj):
     config = obj.get_config()
     del config['name']
     return type(obj)(**config)
+
+
+def save_model(model, fname, overwrite=False, attrs={}):
+    """
+    Saves the weights and the model config in the HDF5 fname.
+    The model config is save in the `model` attribute of the HDF5 file
+    as an utf-8 encoded json string.
+    """
+    assert 'layer_names' not in attrs
+    model.save_weights(fname, overwrite)
+    f = h5py.File(fname, 'r+')
+    f.attrs['model'] = model.to_json().encode('utf-8')
+    for k, v in attrs.items():
+        if type(v) == str:
+            v = v.encode('utf-8')
+        f.attrs[k] = v
+    f.close()
+
+
+def load_model(fname, custom_objects={}):
+    """
+    Loads the model and weights from `fname`.
+    """
+    f = h5py.File(fname, 'r')
+    json_config = f.attrs['model'].decode('utf-8')
+    f.close()
+    config = json.loads(json_config)
+    model = layer_from_config(config, custom_objects)
+    model.load_weights(fname)
+    return model

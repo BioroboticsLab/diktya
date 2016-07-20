@@ -13,12 +13,14 @@
 # limitations under the License.
 
 import numpy as np
-from diktya.func_api_helpers import sequential, concat
+from diktya.func_api_helpers import sequential, concat, save_model, load_model
+import h5py
 
 from keras.layers.core import Dense
 from keras.engine.topology import Input
 from keras.engine.training import collect_trainable_weights
 from keras.models import Model
+import keras.backend as K
 
 
 def test_concat():
@@ -111,3 +113,24 @@ def test_sequential_enumerate():
     assert dense1.name.endswith('hello.00_dense')
     assert dense2.name.endswith('hello.01_dense')
     assert dense3.name.endswith('hello.02_dense')
+
+
+def test_save_model(tmpdir):
+    x = Input(shape=(20,))
+    y = sequential([
+        Dense(15, name='hey'),
+        Dense(10, name='hoo'),
+    ])(x)
+    m = Model(x, y)
+    fname = str(tmpdir.join("weights.hdf5"))
+    save_model(m, fname)
+
+    f = h5py.File(fname, 'r')
+    print(list(f.attrs.keys()))
+    f.close()
+
+    m_load = load_model(fname)
+    assert [l.name for l in m.layers] == [l.name for l in m_load.layers]
+    for l, l_load in zip(m.layers, m_load.layers):
+        for w, w_load in zip(l.trainable_weights, l_load.trainable_weights):
+            assert (K.get_value(w) == K.get_value(w_load)).all()
