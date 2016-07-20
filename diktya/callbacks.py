@@ -1,4 +1,4 @@
-# Copyright 2016 Leon Sixt
+#Copyright 2016 Leon Sixt
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,16 @@ import keras.backend as K
 from diktya.numpy.utils import tile
 from diktya.plot.tiles import visualise_tiles
 from scipy.misc import imsave
+
+
+class OnEpochEnd(Callback):
+    def __init__(self, func, every_nth_epoch=10):
+        self.func = func
+        self.every_nth_epoch = every_nth_epoch
+
+    def on_epoch_end(self, epoch, logs={}):
+        if epoch % self.every_nth_epoch == 0:
+            self.func(epoch, logs)
 
 
 class VisualiseGAN(Callback):
