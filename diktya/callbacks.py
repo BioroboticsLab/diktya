@@ -1,4 +1,4 @@
-#Copyright 2016 Leon Sixt
+# Copyright 2016 Leon Sixt
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -124,7 +124,21 @@ class LearningRateScheduler(Callback):
 
 
 class AutomaticLearningRateScheduler(Callback):
-    def __init__(self, optimizer, metric, min_improvment=0.001,
+    """
+    This callback automatically reduces the learning rate of the `optimizer`.
+    If the ``metric`` did not improve by at least the ``min_improvment`` amount in
+    the last ``epoch_patience`` epochs, the learning rate of ``optimizer`` will be
+    decreased by ``factor``.
+
+    Args:
+        optimizer (keras Optimizer): Decrease learning rate of this optimizer
+        metric (str): Name of the metric
+        min_improvment (float): minimum-improvement
+        epoch_patience (int): Number of epochs to wait until the metric decreases
+        factor (float): Reduce learning rate by this factor
+
+    """
+    def __init__(self, optimizer, metric='loss', min_improvment=0.001,
                  epoch_patience=3, factor=0.25):
         assert hasattr(optimizer, 'lr')
         self.optimizer = optimizer
