@@ -132,5 +132,21 @@ def test_history_per_batch():
 
     assert hist.history['loss'] == losses
 
+
+def test_history_per_batch_plot():
+    hist = HistoryPerBatch()
+    hist.params = {}
+    hist.params['metrics'] = ['loss']
+    hist.on_train_begin(0)
+    n = 50
+    mean = 1/np.arange(1, n+1)
+    std = 1/np.arange(1, n+1)
+    for e in range(n):
+        hist.on_epoch_begin(e)
+        for b in range(100):
+            hist.on_batch_begin(b)
+            hist.on_batch_end(b, logs={'loss': float(np.random.normal(mean[e], std[e], 1))})
+        hist.on_epoch_end(b)
+
     fig, axes = hist.plot()
     fig.savefig(TEST_OUTPUT_DIR + "/callback_history.png")

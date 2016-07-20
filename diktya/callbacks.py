@@ -175,11 +175,15 @@ class HistoryPerBatch(Callback):
                 self.history[k] = [[]]
             self.history[k][-1].append(float(logs[k]))
 
-    def plot(self, fig=None, axes=None):
+    def plot(self, metrics=None, fig=None, axes=None, skip_first_batch=True):
         """
         Plots the losses and variance for every epoch.
 
         Args:
+            metrics (list): this metric names will be plotted
+            skip_first_batch (bool): skip the first batch. Use full if the
+                first batch has a high loss and brakes the scaling of the loss
+                axis.
             fig: matplotlib figure
             axes: matplotlib axes
 
@@ -190,13 +194,23 @@ class HistoryPerBatch(Callback):
             fig = plt.figure()
         if axes is None:
             axes = fig.add_subplot(111)
+        if metrics is None:
+            metrics = self.params['metrics']
+        if skip_first_batch:
+            start = 1
+        else:
+            start = 0
 
         for label, epochs in self.history.items():
-            means = []
-            for epoch in epochs:
-                means.append(np.mean(epoch))
-            means = np.array(means)
-            axes.plot(np.arange(len(means)), means, label=label)
+            if label not in metrics:
+                continue
+            means = np.array([np.mean(e) for e in epochs[start:]])
+            stds = np.array([np.std(e) for e in epochs[start:]])
+            epoch_labels = np.arange(start + 1, len(means) + start + 1)
+            axes.fill_between(epoch_labels, means-2*stds, means+2*stds, facecolor='gray', alpha=0.5)
+            axes.plot(epoch_labels, means, label=label)
+
+        axes.legend()
         axes.set_xlabel('epoch')
         axes.set_ylabel('loss')
         return fig, axes
