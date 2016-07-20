@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from diktya.transform import tile, zip_tile
+from diktya.numpy.utils import tile, zip_tile
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def zip_visualise_tiles(*arrs, show=True):
@@ -24,7 +25,18 @@ def zip_visualise_tiles(*arrs, show=True):
 
 
 def visualise_tiles(images, show=True):
+    """
+
+    """
     tiled_fakes = tile(images)
-    plt.imshow(tiled_fakes[0], cmap='gray')
+    if len(tiled_fakes) == 3:
+        plt.imshow(np.moveaxis(tiled_fakes, 0, -1))
+    elif len(tiled_fakes) == 1:
+        plt.imshow(tiled_fakes[0], cmap='gray')
+    else:
+        raise Exception("Expected color or gray image.")
+
+    plt.grid(False)
+    plt.axis('off')
     if show:
         plt.show()

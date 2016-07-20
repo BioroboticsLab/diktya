@@ -22,6 +22,7 @@ from keras.callbacks import Callback
 import keras.backend as K
 
 from diktya.numpy.utils import tile
+from diktya.plot.tiles import visualise_tiles
 from scipy.misc import imsave
 
 
@@ -46,20 +47,16 @@ class VisualiseGAN(Callback):
         z_shape = self.model.z_shape
         z_shape = (self.nb_samples, ) + z_shape[1:]
         self.z = np.random.uniform(-1, 1, z_shape)
+        self(os.path.join(self.output_dir, "on_train_begin.png"))
 
     def __call__(self, fname=None):
         fake = self.model.generate({'z': self.z})
         fake = self.preprocess(fake)
-        tiled_fakes = tile(fake)
         if self.show:
-            if tiled_fakes.shape[0] == 1:
-                plt.imshow(tiled_fakes[0], cmap='gray')
-            else:
-                plt.imshow(tiled_fakes)
-            plt.grid(False)
-            plt.axes('off')
+            visualise_tiles(fake, show=False)
             plt.show()
         if fname is not None:
+            tiled_fakes = tile(fake)
             imsave(fname, np.moveaxis(tiled_fakes, 0, -1))
 
     def on_epoch_end(self, epoch, logs={}):
