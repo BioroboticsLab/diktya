@@ -17,6 +17,7 @@ from keras.layers.core import Activation
 from keras.utils.layer_utils import layer_from_config
 
 from contextlib import contextmanager
+from collections import OrderedDict
 import h5py
 import json
 
@@ -196,6 +197,13 @@ def keras_copy(obj):
     config = obj.get_config()
     del config['name']
     return type(obj)(**config)
+
+
+def predict_wrapper(func, names):
+    def wrapper(*args, **kwargs):
+        out = func(*args, **kwargs)
+        return OrderedDict(zip(names, out))
+    return wrapper
 
 
 def save_model(model, fname, overwrite=False, attrs={}):
