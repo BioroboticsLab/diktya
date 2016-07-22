@@ -14,6 +14,7 @@
 #
 
 import os
+import json
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -178,12 +179,15 @@ class HistoryPerBatch(Callback):
     """
     Saves the metrics of every batch.
 
+    Args:
+        output_dir (optional str): Save history and plot to this directory.
     Attributes:
         history: history of every batch. Use ``history[metric_name][epoch][batch]``
             to index.
     """
-    def __init__(self):
+    def __init__(self, output_dir=None):
         self.history = {}
+        self.output_dir = output_dir
 
     def on_epoch_begin(self, epoch, logs=None):
         for k in self.history.keys():
@@ -196,6 +200,15 @@ class HistoryPerBatch(Callback):
             if k not in self.history:
                 self.history[k] = [[]]
             self.history[k][-1].append(float(logs[k]))
+
+    def on_train_end(self, logs={}):
+        if self.output_dir is not None:
+            os.makedirs(self.output_dir, exist_ok=True)
+            with open(os.path.join(self.output_dir, "history.json"), 'w+') as f:
+                json.dump(self.history, f)
+
+            fig, _ = self.plot()
+            fig.savefig(os.path.join(self.output_dir, "history.png"))
 
     def plot(self, metrics=None, fig=None, axes=None, skip_first_batch=True):
         """

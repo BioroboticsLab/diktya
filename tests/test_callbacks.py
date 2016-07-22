@@ -104,8 +104,8 @@ def test_automatic_lr_scheduler():
     assert np.allclose(K.get_value(optimizer.lr), 0.1 * lr_scheduler.factor)
 
 
-def test_history_per_batch():
-    hist = HistoryPerBatch()
+def test_history_per_batch(tmpdir):
+    hist = HistoryPerBatch(str(tmpdir))
 
     hist.params = {}
     hist.params['metrics'] = ['loss']
@@ -131,6 +131,10 @@ def test_history_per_batch():
         losses[-1].append(loss)
 
     assert hist.history['loss'] == losses
+
+    hist.on_train_end()
+    assert tmpdir.join("history.json").exists()
+    assert tmpdir.join("history.png").exists()
 
 
 def test_history_per_batch_plot():
