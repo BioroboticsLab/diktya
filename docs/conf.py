@@ -14,11 +14,32 @@
 
 import sys
 import os
+import subprocess
+import json
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath('..'))
+
+
+def get_modules():
+    cwd = os.path.dirname(__file__)
+    print(cwd)
+    get_imports = os.path.join(cwd, 'get_imports.sh')
+    p = subprocess.Popen(get_imports, cwd=cwd, stdout=subprocess.PIPE)
+    stdout, stderr = p.communicate()
+    modules = json.loads(stdout.decode('utf-8'))[:-1]
+    modules = [m for m in modules if not m.startswith('diktya')]
+    mock_modules = []
+    for module in modules:
+        try:
+            __import__(module)
+        except ImportError:
+            mock_modules.append(module)
+    return mock_modules
+
+autodoc_mock_imports = get_modules()
 
 # -- General configuration ------------------------------------------------
 
