@@ -208,9 +208,9 @@ def predict_wrapper(func, names):
 
 def save_model(model, fname, overwrite=False, attrs={}):
     """
-    Saves the weights and the model config in the HDF5 fname.
-    The model config is save in the `model` attribute of the HDF5 file
-    as an utf-8 encoded json string.
+    Saves the weights and the config of ``model`` in the HDF5 file ``fname``.
+    The model config is saved as: ``f.attrs["model"] = model.to_json().encode('utf-8')``,
+    where ``f`` is the HDF5 file.
     """
     assert 'layer_names' not in attrs
     model.save_weights(fname, overwrite)
@@ -225,7 +225,7 @@ def save_model(model, fname, overwrite=False, attrs={}):
 
 def load_model(fname, custom_objects={}):
     """
-    Loads the model and weights from `fname`.
+    Loads the model and weights from ``fname``. Counterpart to :py:func:`save_model`.
     """
     f = h5py.File(fname, 'r')
     json_config = f.attrs['model'].decode('utf-8')
