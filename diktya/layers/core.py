@@ -191,3 +191,52 @@ class InBounds(Layer):
         }
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+
+class BatchLoss(Layer):
+    """
+    Regularizes the activation to have ``std = 1`` and ``mean = 0``.
+
+    Args:
+        axis (int): Axis along to compute the std and mean.
+        normalize (bool): Normalize the output by the std and mean of the batch during training.
+        weight (float): Weight of the regularization loss
+    """
+    def __init__(self, axis=1, normalize=True,
+                 weight=5.,
+                 **kwargs):
+        self.axis = axis
+        self.normalize = normalize
+        self.weight = weight
+        super(BatchLoss, self).__init__(**kwargs)
+
+    def compute_loss(self, input, output, input_mask=None, output_mask=None):
+        mean, std = self._get_mean_and_std(input)
+        return self.weight * (K.abs(mean) + K.abs(std - 1))
+
+    def _get_mean_and_std(self, x):
+        reduction_axes = list(range(K.ndim(x)))
+        del reduction_axes[self.axis]
+        mean = K.mean(x, axis=reduction_axes)
+        std = K.std(x, axis=reduction_axes)
+        return mean, std
+
+    def call(self, x, mask=None):
+        if self.normalize:
+            mean, std = self._get_mean_and_std(x)
+            broadcast_shape = [1] * K.ndim(x)
+            broadcast_shape[self.axis] = K.shape(x)[self.axis]
+            broadcast_mean = K.reshape(mean, broadcast_shape)
+            broadcast_std = K.reshape(std, broadcast_shape)
+            return K.in_train_phase((x - broadcast_mean) / broadcast_std, x)
+        else:
+            return x
+
+    def get_config(self):
+        config = {
+            'axis': self.axis,
+            'normalize': self.normalize,
+            'weight': self.weight,
+        }
+        base_config = super().get_config()
+        return dict(list(base_config.items()) + list(config.items()))

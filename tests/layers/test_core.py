@@ -11,10 +11,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from diktya.layers.core import Swap, Subtensor, SplitAt, InBounds
+from diktya.layers.core import Swap, Subtensor, SplitAt, InBounds, BatchLoss
 import numpy as np
 import theano
 from keras.models import Sequential, Model
+from keras.layers.core import Activation
+from keras.layers.convolutional import Convolution2D
 from keras.engine.topology import Input
 
 
@@ -85,3 +87,23 @@ def test_in_bounds_regularizer():
 
     loss_on_100 = model.train_on_batch(np.array([[100]]), np.array([[1]]))
     assert float(loss_on_2) < float(loss_on_100)
+
+
+def test_batch_loss():
+    bl = BatchLoss(axis=1, normalize=True)
+    shape = (1, 8, 8)
+    input = Input(shape=shape)
+    conv_out = Convolution2D(4, 3, 3, border_mode='same')(input)
+    x = bl(conv_out)
+    x = Activation('relu')(x)
+    m = Model(input, x)
+    m.compile('adam')
+    m.fit(np.random.uniform(-1, 1, (10000,) + shape),
+          batch_size=128,
+          nb_epoch=10)
+
+    m_conv = Model(input, conv_out)
+    data = np.random.uniform(-1, 1, (1000,) + shape)
+    conv_out = m_conv.predict(data)
+    assert np.mean(abs(conv_out.mean(axis=(0, 2, 3)))) <= 0.1
+    assert np.mean(np.abs(1 - conv_out.std(axis=(0, 2, 3)))) <= 0.1
