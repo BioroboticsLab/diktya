@@ -210,7 +210,8 @@ class HistoryPerBatch(Callback):
             fig, _ = self.plot()
             fig.savefig(os.path.join(self.output_dir, "history.png"))
 
-    def plot(self, metrics=None, fig=None, axes=None, skip_first_batch=True):
+    def plot(self, metrics=None, fig=None, axes=None, skip_first_batch=True,
+             save_as=None):
         """
         Plots the losses and variance for every epoch.
 
@@ -221,7 +222,9 @@ class HistoryPerBatch(Callback):
                 axis.
             fig: matplotlib figure
             axes: matplotlib axes
-
+            save_as (str): Save figure under this path. If ``save_as`` is a
+                relative path and ``self.output_dir`` is set, it is appended to
+                ``self.output_dir``.
         Returns:
             A tuple of fig, axes
         """
@@ -248,4 +251,10 @@ class HistoryPerBatch(Callback):
         axes.legend()
         axes.set_xlabel('epoch')
         axes.set_ylabel('loss')
+        if save_as:
+            if not os.path.isabs(save_as) and self.output_dir:
+                path = os.path.join(self.output_dir, save_as)
+            else:
+                path = save_as
+            fig.savefig(path)
         return fig, axes

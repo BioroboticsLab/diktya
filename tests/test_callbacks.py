@@ -23,6 +23,7 @@ from keras.layers.core import Dense
 from keras.optimizers import Adam
 import keras.backend as K
 import os
+import filecmp
 import pytest
 import seaborn  # noqa
 
@@ -153,4 +154,8 @@ def test_history_per_batch_plot():
         hist.on_epoch_end(b)
 
     fig, axes = hist.plot()
-    fig.savefig(TEST_OUTPUT_DIR + "/callback_history.png")
+    path1 = TEST_OUTPUT_DIR + "/callback_history.png"
+    fig.savefig(path1)
+    path2 = TEST_OUTPUT_DIR + "/callback_history2.png"
+    hist.plot(save_as=path2)
+    filecmp.cmp(path1, path2)
