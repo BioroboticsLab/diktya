@@ -19,7 +19,7 @@ install:
   - pip install git+https://github.com/EderSantana/seya.git@50aafed580adf1d9cd86ebe8ae96432efa079667#egg=seya
   - pip install .
 script:
-  - py.test
+  - py.test -v
   - sphinx-build docs _build/html
 notifications:
   slack:
