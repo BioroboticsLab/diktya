@@ -13,10 +13,11 @@
 # limitations under the License.
 
 
-import numpy as np
-import scipy.stats
 import json
 import copy
+from collections import OrderedDict
+import numpy as np
+import scipy.stats
 
 
 def to_radians(x):
@@ -313,8 +314,17 @@ class DistributionCollection(Distribution, Normalization):
     """
 
     def __init__(self, distributions):
-        self._dist_nb_elems_norm = {}
-        for name, descr in distributions.items():
+        self._dist_nb_elems_norm = OrderedDict()
+
+        if hasattr(distributions, 'items'):
+            iterator = distributions.items
+        else:
+            def iter():
+                for dist in distributions:
+                    yield dist[0], dist[1:]
+            iterator = iter
+
+        for name, descr in iterator():
             if type(descr) not in (list, tuple):
                 distribution = get(descr)
                 self._dist_nb_elems_norm[name] = (distribution, 1,
@@ -368,25 +378,24 @@ class DistributionCollection(Distribution, Normalization):
 
     def get_config(self):
         config = super().get_config()
-        config['distributions'] = {
-            name: [dist.get_config(), nb_elems, norm.get_config()]
+        config['distributions'] = [
+            [name, dist.get_config(), nb_elems, norm.get_config()]
             for name, (dist, nb_elems, norm) in self._dist_nb_elems_norm.items()
-        }
+        ]
         return config
 
 
-
 def examplary_tag_distribution(nb_bits=12):
-    return {
-        'bits': (Bernoulli(), nb_bits),
-        'z_rotation': (Uniform(-np.pi, np.pi), 1, SinCosAngleNorm()),
-        'x_rotation': (Zeros(), 1),
-        'y_rotation': (Zeros(), 1),
-        'center': (Normal(0, 2), 2),
-        'radius': (Normal(24, 0.4), 1),
-        'inner_ring_radius': (Constant(0.4), 1),
-        'middle_ring_radius': (Constant(0.8), 1),
-        'outer_ring_radius': (Constant(1), 1),
-        'bulge_factor': (Constant(0.4), 1),
-        'focal_length': (Constant(2), 1),
-    }
+    return OrderedDict([
+        ('bits', (Bernoulli(), nb_bits)),
+        ('z_rotation', (Uniform(-np.pi, np.pi), 1, SinCosAngleNorm())),
+        ('x_rotation', (Zeros(), 1)),
+        ('y_rotation', (Zeros(), 1)),
+        ('center', (Normal(0, 2), 2)),
+        ('radius', (Normal(24, 0.4), 1)),
+        ('inner_ring_radius', (Constant(0.4), 1)),
+        ('middle_ring_radius', (Constant(0.8), 1)),
+        ('outer_ring_radius', (Constant(1), 1)),
+        ('bulge_factor', (Constant(0.4), 1)),
+        ('focal_length', (Constant(2), 1)),
+    ])
