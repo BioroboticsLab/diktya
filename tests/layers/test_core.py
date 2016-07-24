@@ -79,13 +79,16 @@ def test_in_bounds_regularizer():
     model = Sequential()
     model.add(InBounds(-1, 1, clip=True, input_shape=(1,)))
     model.compile('adam', 'mse')
-    loss = model.train_on_batch(np.array([[0]]), np.array([[0]]))
+    assert model.metrics_names == ['loss', 'reg']
+
+    loss, reg = model.train_on_batch(np.array([[0]]), np.array([[0]]))
+
     assert float(loss) == 0
 
-    loss_on_2 = model.train_on_batch(np.array([[2]]), np.array([[1]]))
+    loss_on_2, reg = model.train_on_batch(np.array([[2]]), np.array([[1]]))
     assert float(loss_on_2) > 0
 
-    loss_on_100 = model.train_on_batch(np.array([[100]]), np.array([[1]]))
+    loss_on_100, reg = model.train_on_batch(np.array([[100]]), np.array([[1]]))
     assert float(loss_on_2) < float(loss_on_100)
 
 
