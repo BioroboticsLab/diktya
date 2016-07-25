@@ -227,10 +227,15 @@ def load_model(fname, custom_objects={}):
     """
     Loads the model and weights from ``fname``. Counterpart to :py:func:`save_model`.
     """
-    f = h5py.File(fname, 'r')
-    json_config = f.attrs['model'].decode('utf-8')
-    f.close()
+    json_config = get_hdf5_attr(fname, 'model').decode('utf-8')
     config = json.loads(json_config)
     model = layer_from_config(config, custom_objects)
     model.load_weights(fname)
     return model
+
+def get_hdf5_attr(fname, attr_name):
+    """Returns the toplevel attribute ``attr_name`` of the hdf5 file ``fname``."""
+    f = h5py.File(fname, 'r')
+    value = f.attrs[attr_name]
+    f.close()
+    return value
