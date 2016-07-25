@@ -23,6 +23,7 @@ from keras.callbacks import Callback
 import keras.backend as K
 
 from diktya.numpy import tile, image_save
+from diktya.func_api_helpers import save_model
 from diktya.plot.tiles import visualise_tiles
 
 
@@ -81,14 +82,18 @@ class VisualiseGAN(Callback):
 
 class SaveModels(Callback):
     def __init__(self, models, output_dir=None, every_epoch=50,
-                 overwrite=True):
+                 overwrite=True, hdf5_attrs=None):
         """
-        models: dict with {"name": model}
+        Args:
+            models: dict with {"name": model}
         """
         self.models = models
         self.every_epoch = every_epoch
         self.overwrite = overwrite
         self.output_dir = output_dir
+        if hdf5_attrs is None:
+            hdf5_attrs = {}
+        self.hdf5_attrs = hdf5_attrs
 
     def on_epoch_end(self, epoch, log={}):
         epoch = epoch
@@ -97,7 +102,7 @@ class SaveModels(Callback):
                 fname = name.format(epoch=epoch)
                 if self.output_dir is not None:
                     fname = os.path.join(self.output_dir, fname)
-                model.save_weights(fname, self.overwrite)
+                save_model(model, fname, overwrite=self.overwrite, attrs=self.hdf5_attrs)
 
 
 class LearningRateScheduler(Callback):
