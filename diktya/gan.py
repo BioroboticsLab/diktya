@@ -103,8 +103,9 @@ class GAN(AbstractModel):
         nb_fakes = fake.shape[0]
         fake_realness = realness[:nb_fakes]
         real_realness = realness[nb_fakes:]
-        g_fake_realness = fake_realness[:nb_fakes // 2]
-        d_fake_realness = fake_realness[nb_fakes // 2:]
+        split = 2*nb_fakes // 3
+        g_fake_realness = fake_realness[:split]
+        d_fake_realness = fake_realness[split:]
 
         d_loss = K.mean(K.binary_crossentropy(real_realness, K.ones_like(real_realness)))
         d_loss += K.mean(K.binary_crossentropy(d_fake_realness, K.zeros_like(real_realness)))
@@ -162,7 +163,7 @@ class GAN(AbstractModel):
         elif type(inputs) is np.ndarray:
             inputs = {'data': inputs}
 
-        inputs['z'] = self.random_z(2*len(inputs['data']))
+        inputs['z'] = self.random_z(3*len(inputs['data']))
 
         input_list = []
         for name in self.input_names:
