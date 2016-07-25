@@ -136,6 +136,9 @@ def sequential(layers, ns=None, trainable=True):
                     yield x
 
     for i, l in enumerate(flatten(layers)):
+        if not hasattr(l, 'name'):
+            continue
+
         if ns is not None:
             if '.' not in l.name:
                 name = type(l).__name__.lower()
