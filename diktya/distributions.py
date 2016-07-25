@@ -283,11 +283,10 @@ class DistributionCollection(Distribution, Normalization):
     A collection of multiple distributions:
 
     Args:
-        distributions (dict):  A dictionary where the items have the form:
-            * name: distribution
-            * name: (distribution, )
-            * name: (distribution, nb_elems)
-            * name: (distribution, nb_elems, normalization)
+        distributions:  A list of tuples where the tuples have the form
+            * (name, distribution)
+            * (name, distribution, nb_elems)
+            * (name, distribution, nb_elems, normalization)
             `distribution` must be a subclass of  :class:`.Distribution`.
             The `nb_elems` specify how many elements are drawn from the
             distribution, if omitted it will be set to 1.
@@ -295,11 +294,11 @@ class DistributionCollection(Distribution, Normalization):
             omitted and will then be set to `dist.default_normalization()`.
     Example:
     ::
-        dist = DistributionCollection({
-            "x_rotation": Normal(0, 1),
-            "y_rotation": (Uniform(-np.pi, np.pi), 1, SinCosAngleNorm()),
-            "center": (Normal(0, 2), 2)
-        })
+        dist = DistributionCollection([
+            ("x_rotation", Normal(0, 1)),
+            ("y_rotation", Uniform(-np.pi, np.pi), 1, SinCosAngleNorm()),
+            ("center", Normal(0, 2), 2),
+        ])
         # Sample 10 vectors from the collection
         arr = dist.sample(10)
         # The array is a structured numpy array. The keys are the one from
@@ -319,10 +318,9 @@ class DistributionCollection(Distribution, Normalization):
         if hasattr(distributions, 'items'):
             iterator = distributions.items
         else:
-            def iter():
+            def iterator():
                 for dist in distributions:
                     yield dist[0], dist[1:]
-            iterator = iter
 
         for name, descr in iterator():
             if type(descr) not in (list, tuple):
@@ -344,14 +342,15 @@ class DistributionCollection(Distribution, Normalization):
                 norm = get(descr[2])
                 self._dist_nb_elems_norm[name] = (distribution, nb_elems, norm)
 
-        self.nb_elems = {n: nb_elems for n, (_, nb_elems, _)
-                         in self._dist_nb_elems_norm.items()}
-        self.normalizations = {n: norm for n, (_, _, norm)
-                               in self._dist_nb_elems_norm.items()}
-        self.distributions = {n: dist for n, (dist, _, _) in self._dist_nb_elems_norm.items()}
+        self.nb_elems = OrderedDict([(n, nb_elems) for n, (_, nb_elems, _)
+                                     in self._dist_nb_elems_norm.items()])
+        self.normalizations = OrderedDict([(n, norm) for n, (_, _, norm)
+                                           in self._dist_nb_elems_norm.items()])
+        self.distributions = OrderedDict([(n, dist) for n, (dist, _, _)
+                                          in self._dist_nb_elems_norm.items()])
 
         self.dtype = [(name, "({},)float32".format(nb_elems))
-                      for name, nb_elems in sorted(self.nb_elems.items())]
+                      for name, nb_elems in self.nb_elems.items()]
         self.norm_dtype = [
             (name, "({},)float32".format(nb_elems*len(norm.normalize(np.zeros((1,))))))
             for name, (_, nb_elems, norm) in self._dist_nb_elems_norm.items()]
@@ -389,8 +388,8 @@ def examplary_tag_distribution(nb_bits=12):
     return OrderedDict([
         ('bits', (Bernoulli(), nb_bits)),
         ('z_rotation', (Uniform(-np.pi, np.pi), 1, SinCosAngleNorm())),
-        ('x_rotation', (Zeros(), 1)),
         ('y_rotation', (Zeros(), 1)),
+        ('x_rotation', (Zeros(), 1)),
         ('center', (Normal(0, 2), 2)),
         ('radius', (Normal(24, 0.4), 1)),
         ('inner_ring_radius', (Constant(0.4), 1)),

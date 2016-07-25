@@ -7,7 +7,7 @@ import numpy as np
 
 
 def test_distribution_collection_dtype():
-    dists = DistributionCollection({'const': (Constant(5), 2), 'bern': (Bernoulli(), 5)})
+    dists = DistributionCollection([('const', Constant(5), 2), ('bern', Bernoulli(), 5)])
     bs = 10
     zeros = np.zeros((bs,), dtype=dists.dtype)
     for name, nb_elems in dists.nb_elems.items():
@@ -19,7 +19,7 @@ def test_distribution_collection_dtype():
 
 
 def test_distribution_collection_sampling():
-    dists = DistributionCollection({'const': (Constant(5), 2), 'bern': (Bernoulli(), 5)})
+    dists = DistributionCollection([('const', Constant(5), 2), ('bern', Bernoulli(), 5)])
 
     bs = 10
     arr = dists.sample(bs)
@@ -31,7 +31,7 @@ def test_distribution_collection_sampling():
 
 
 def test_distribution_collection_normalization():
-    dists = DistributionCollection({'const': (Constant(5), 2), 'bern': (Bernoulli(), 5)})
+    dists = DistributionCollection([('const', Constant(5), 2), ('bern', Bernoulli(), 5)])
     bs = 10
     arr = dists.sample(bs)
     norm_arr = dists.normalize(arr)
@@ -157,7 +157,7 @@ def test_combine_normalization_serialization():
 
 
 def test_distribution_collection_serialization():
-    dists = DistributionCollection({'norm': (Normal(5, 2), 2), 'bern': (Bernoulli(), 5)})
+    dists = DistributionCollection([('norm', Normal(5, 2), 2), ('bern', Bernoulli(), 5)])
     json_str = dists.to_json()
     dists_loaded = load_from_json(json_str)
     assert dists_loaded.dtype == dists.dtype
@@ -175,3 +175,10 @@ def test_distribution_collection_serialization():
     for name in dists.names:
         assert abs(arr[name].mean() - arr_loaded[name].mean()) <= 0.10
         assert abs(arr[name].std() - arr_loaded[name].std()) <= 0.10
+
+    assert dists_loaded.names == dists.names
+    assert dists_loaded.dtype == dists.dtype
+    assert dists_loaded.norm_dtype == dists.norm_dtype
+    assert dists_loaded.distributions == dists.distributions
+    assert dists_loaded.normalizations == dists.normalizations
+    assert dists_loaded.nb_elems == dists.nb_elems
