@@ -108,16 +108,21 @@ def conv2d_block(n, filters=3, depth=1, border='same', activation='relu',
 
 def resnet(n, filters=3, activation='relu'):
     """
-    A ResNet block.
+    A ResNet block. If the number of filter maps is not equal to ``n``,
+    a :py:func:`conv2d_block` with ``n`` filter maps is added.
 
     Args:
         n: number of filters
-        filters: shape of the conv filters
+        filters: size of the conv filters
 
     Returns:
         A function that takes a keras tensor as input and runs the resnet block
     """
     def wrapper(x):
+        shape = x._keras_shape
+        if shape[1] != n:
+            x = sequential(conv2d_block(n, filters, depth=1, activation=activation))(x)
+
         f = sequential(conv2d_block(n, filters, depth=2, activation=activation))
         return merge([x, f(x)], mode='sum')
     return wrapper
