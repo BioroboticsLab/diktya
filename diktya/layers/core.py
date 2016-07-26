@@ -208,6 +208,7 @@ class BatchLoss(Layer):
         self.normalize = normalize
         self.l1 = K.cast_to_floatx(l1)
         self.l2 = K.cast_to_floatx(l2)
+        self.uses_learning_phase = normalize
         super(BatchLoss, self).__init__(**kwargs)
 
     def compute_loss(self, input, output, input_mask=None, output_mask=None):
