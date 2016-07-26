@@ -203,16 +203,18 @@ class BatchLoss(Layer):
         weight (float): Weight of the regularization loss
     """
     def __init__(self, axis=1, normalize=True,
-                 weight=5.,
-                 **kwargs):
+                 l1=0., l2=0., **kwargs):
         self.axis = axis
         self.normalize = normalize
-        self.weight = weight
+        self.l1 = K.cast_to_floatx(l1)
+        self.l2 = K.cast_to_floatx(l2)
         super(BatchLoss, self).__init__(**kwargs)
 
     def compute_loss(self, input, output, input_mask=None, output_mask=None):
         mean, std = self._get_mean_and_std(input)
-        return self.weight * (K.abs(mean) + K.abs(std - 1))
+        l1_loss = self.l1 * (K.abs(mean) + K.abs(std - 1))
+        l2_loss = self.l2 * (K.square(mean) + K.square(std - 1))
+        return l1_loss + l2_loss
 
     def _get_mean_and_std(self, x):
         reduction_axes = list(range(K.ndim(x)))
@@ -236,7 +238,8 @@ class BatchLoss(Layer):
         config = {
             'axis': self.axis,
             'normalize': self.normalize,
-            'weight': self.weight,
+            'l1': self.l1,
+            'l2': self.l2
         }
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
