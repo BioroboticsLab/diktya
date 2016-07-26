@@ -234,7 +234,7 @@ class BatchLoss(Layer):
             return K.in_train_phase((x - broadcast_mean) /
                                     (broadcast_std + K.epsilon()), x)
         else:
-            return x
+            return x * 1.
 
     def get_config(self):
         config = {
