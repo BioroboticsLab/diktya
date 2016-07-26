@@ -221,7 +221,7 @@ class BatchLoss(Layer):
         reduction_axes = list(range(K.ndim(x)))
         del reduction_axes[self.axis]
         mean = K.mean(x, axis=reduction_axes)
-        std = K.std(x, axis=reduction_axes)
+        std = K.sqrt(K.var(x, axis=reduction_axes) + K.epsilon())
         return mean, std
 
     def call(self, x, mask=None):
@@ -231,7 +231,8 @@ class BatchLoss(Layer):
             broadcast_shape[self.axis] = K.shape(x)[self.axis]
             broadcast_mean = K.reshape(mean, broadcast_shape)
             broadcast_std = K.reshape(std, broadcast_shape)
-            return K.in_train_phase((x - broadcast_mean) / broadcast_std, x)
+            return K.in_train_phase((x - broadcast_mean) /
+                                    (broadcast_std + K.epsilon()), x)
         else:
             return x
 
