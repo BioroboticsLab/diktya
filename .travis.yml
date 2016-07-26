@@ -16,7 +16,6 @@ install:
   - pip install seaborn
   - pip install git+https://github.com/Theano/Theano.git#egg=theano
   - pip install git+https://github.com/berleon/keras.git@losses#egg=keras
-  - pip install git+https://github.com/EderSantana/seya.git@50aafed580adf1d9cd86ebe8ae96432efa079667#egg=seya
   - pip install .
 script:
   - py.test -v

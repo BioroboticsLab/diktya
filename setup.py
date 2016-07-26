@@ -11,7 +11,6 @@ setup(name='diktya',
             "keras",
             "pytest>=2.7.2",
             "scikit-image>=0.11.3",
-            "seya",
             "dotmap>=1.1.2",
             "h5py"
       ],
