@@ -93,7 +93,7 @@ def test_in_bounds_regularizer():
 
 
 def test_batch_loss():
-    bl = BatchLoss(axis=1, normalize=True)
+    bl = BatchLoss(axis=1, normalize=True, l2=1.)
     shape = (1, 8, 8)
     input = Input(shape=shape)
     conv_out = Convolution2D(4, 3, 3, border_mode='same')(input)
