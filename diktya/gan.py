@@ -19,7 +19,7 @@ import keras.backend as K
 from diktya.models import AbstractModel
 from diktya.func_api_helpers import get_layer, keras_copy, trainable, name_tensor, \
     concat
-
+from collections import OrderedDict
 
 def _listify(x):
     if type(x) != list:
@@ -107,11 +107,21 @@ class GAN(AbstractModel):
         g_fake_realness = fake_realness[:split]
         d_fake_realness = fake_realness[split:]
 
+        outputs = OrderedDict()
+        g_loss = K.mean(K.binary_crossentropy(g_fake_realness, K.ones_like(real_realness)))
+        outputs['g_loss'] = g_loss
+        g_reg_loss = sum([v for v in g_additional_losses.values()])
+        if g_reg_loss != 0:
+            outputs['g_reg_loss'] = g_reg_loss
+        g_total_loss = g_loss + g_reg_loss
+
         d_loss = K.mean(K.binary_crossentropy(real_realness, K.ones_like(real_realness)))
         d_loss += K.mean(K.binary_crossentropy(d_fake_realness, K.zeros_like(real_realness)))
-        d_loss += sum([v for v in d_additional_losses.values()])
-        g_loss = K.mean(K.binary_crossentropy(g_fake_realness, K.ones_like(real_realness)))
-        g_loss += sum([v for v in g_additional_losses.values()])
+        outputs['d_loss'] = d_loss
+        d_reg_loss = sum([v for v in d_additional_losses.values()])
+        if d_reg_loss != 0:
+            outputs['d_reg_loss'] = d_reg_loss
+        d_total_loss = d_loss + d_reg_loss
 
         inputs = {i.name: i for i in self.g.inputs + self.d.inputs}
         inputs_list = []
@@ -119,15 +129,16 @@ class GAN(AbstractModel):
             inputs_list.append(inputs[name])
 
         g_updates = self.g_optimizer.get_updates(
-            collect_trainable_weights(self.g), self.g.constraints, g_loss)
+            collect_trainable_weights(self.g), self.g.constraints, g_total_loss)
         d_updates = self.d_optimizer.get_updates(
-            collect_trainable_weights(self.d), self.d.constraints, d_loss)
+            collect_trainable_weights(self.d), self.d.constraints, d_total_loss)
 
         if self.uses_learning_phase:
             lr_phase = [K.learning_phase()]
         else:
             lr_phase = []
-        self._train_function = K.function(inputs_list + lr_phase, [g_loss, d_loss],
+        self.metrics_names = list(outputs.keys())
+        self._train_function = K.function(inputs_list + lr_phase, list(outputs.values()),
                                           updates=g_updates + d_updates)
 
     @property
@@ -176,22 +187,6 @@ class GAN(AbstractModel):
         else:
             lr_phase = []
         return self._train_function(input_list + lr_phase)
-
-    @property
-    def metrics_names(self):
-        """
-        Name of the metrics returned by :meth:`train_on_batch`.
-        """
-        def replace(l, X, Y):
-            for i, v in enumerate(l):
-                if v == X:
-                    l.pop(i)
-                    l.insert(i, Y)
-            return l
-
-        g_metrics = replace(_listify(self.g.metrics_names), 'loss', 'g_loss')
-        d_metrics = replace(_listify(self.d.metrics_names), 'loss', 'd_loss')
-        return g_metrics + d_metrics
 
     def fit_generator(self, generator, nb_batches_per_epoch,
                       nb_epoch, batch_size=128, verbose=1,
