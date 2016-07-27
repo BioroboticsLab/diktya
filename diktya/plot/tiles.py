@@ -24,18 +24,33 @@ def zip_visualise_tiles(*arrs, show=True):
         plt.show()
 
 
+def plt_imshow(image, axis=None):
+    """
+    Plot ``image`` on ``axis``. Can handle color images and gray images of
+    shapes ``(3, h, w)``, ``(1, h, w)``, or  ``(h, w)`` where ``h`` = height
+    and ``w`` = width.
+
+    If ``axis`` is ``None`` then ``matplotlib.pyplot`` is used.
+    """
+    if axis is None:
+        axis = plt
+    if len(image.shape) == 3 and len(image) == 3:  # (3, h, w)
+        axis.imshow(np.moveaxis(image, 0, -1))
+    elif len(image.shape) == 3 and len(image) == 1:  # (1, h, w)
+        axis.imshow(image[0], cmap='gray')
+    elif len(image.shape) == 2:   # (h, w)
+        axis.imshow(image, cmap='gray')
+    else:
+        raise Exception("Expected color or gray image. Got image of shape {}"
+                        .format(image.shape))
+
+
 def visualise_tiles(images, show=True):
     """
 
     """
     tiled_fakes = tile(images)
-    if len(tiled_fakes) == 3:
-        plt.imshow(np.moveaxis(tiled_fakes, 0, -1))
-    elif len(tiled_fakes) == 1:
-        plt.imshow(tiled_fakes[0], cmap='gray')
-    else:
-        raise Exception("Expected color or gray image.")
-
+    plt_imshow(tiled_fakes)
     plt.grid(False)
     plt.axis('off')
     if show:
