@@ -24,7 +24,7 @@ import keras.backend as K
 
 from diktya.numpy import tile, image_save
 from diktya.func_api_helpers import save_model
-from diktya.plot.tiles import visualise_tiles
+from diktya.plot.tiles import plt_imshow
 
 
 class OnEpochEnd(Callback):
@@ -35,6 +35,38 @@ class OnEpochEnd(Callback):
     def on_epoch_end(self, epoch, logs={}):
         if epoch % self.every_nth_epoch == 0:
             self.func(epoch, logs)
+
+
+class SampleGAN(Callback):
+    def __init__(self, sample_func, discriminator_func, z, real_data,
+                 should_sample_func=None):
+        self.sample_func = sample_func
+        self.discriminator_func = discriminator_func
+        self.z = z
+        self.real_data = real_data
+        if should_sample_func is None:
+            def should_sample_func(e):
+                return e % 10 == 0 or e <= 15
+
+        self.should_sample_func = should_sample_func
+
+    def sample(self):
+        outs = self.sample_func(self.z)
+        outs['z'] = self.z
+        outs['discriminator_on_fake'] = self.discriminator_func(outs['fake'])
+        outs['discriminator_on_real'] = self.discriminator_func(self.real_data)
+        outs['real'] = self.real_data
+        return outs
+
+    def on_train_begin(self, logs=None):
+        if logs is None:
+            logs = {}
+        logs['samples'] = self.sample()
+
+    def on_epoch_end(self, epoch, logs=None):
+        if logs is None:
+            logs = {}
+        logs['samples'] = self.sample()
 
 
 class VisualiseGAN(Callback):
@@ -48,36 +80,36 @@ class VisualiseGAN(Callback):
         if self.output_dir is not None:
             os.makedirs(self.output_dir, exist_ok=True)
 
-    def should_visualise(self, i):
-        return i % 50 == 0 or \
-            (i < 1000 and i % 20 == 0) or \
-            (i < 100 and i % 5 == 0) or \
-            i < 15
-
     def on_train_begin(self, logs={}):
-        z_shape = self.model.z_shape
-        z_shape = (self.nb_samples, ) + z_shape[1:]
-        self.z = np.random.uniform(-1, 1, z_shape)
-        self(os.path.join(self.output_dir, "on_train_begin.png"))
+        if 'samples' in logs:
+            self(logs['samples'], os.path.join(self.output_dir, "on_train_begin.png"))
 
-    def __call__(self, fname=None):
-        fake = self.model.generate({'z': self.z})
-        fake = self.preprocess(fake)
+    def call(self, samples):
+        return tile(samples['fake'][:self.nb_samples])
+
+    def __call__(self, samples, fname=None):
+        selected_samples = {}
+        for name, arr in samples.items():
+            if len(arr) < self.nb_samples:
+                raise Exception("Shoud visualise {} samples. But got only {} for {}".format(
+                    self.nb_samples, len(arr), name
+                ))
+            selected_samples[name] = arr[:self.nb_samples]
+        tiles = self.call(selected_samples)
         if self.show:
-            visualise_tiles(fake, show=False)
+            plt_imshow(tiles)
             plt.show()
         if fname is not None:
-            image_save(fname, tile(fake))
+            image_save(fname, tiles)
 
     def on_epoch_end(self, epoch, logs={}):
         epoch = epoch
-        if self.should_visualise(epoch):
+        if 'samples' in logs:
             if self.output_dir is not None:
                 fname = os.path.join(self.output_dir, "{:05d}.png".format(epoch))
             else:
                 fname = None
-            self(fname)
-            plt.clf()
+            self(logs['samples'], fname)
 
 
 class SaveModels(Callback):

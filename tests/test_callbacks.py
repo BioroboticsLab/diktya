@@ -17,7 +17,7 @@ import numpy as np
 
 from conftest import TEST_OUTPUT_DIR
 from diktya.callbacks import SaveModels, LearningRateScheduler, \
-    AutomaticLearningRateScheduler, HistoryPerBatch
+    AutomaticLearningRateScheduler, HistoryPerBatch, VisualiseGAN, SampleGAN
 from keras.models import Sequential
 from keras.layers.core import Dense
 from keras.optimizers import Adam
@@ -26,6 +26,55 @@ import os
 import filecmp
 import pytest
 import seaborn  # noqa
+from unittest.mock import Mock
+
+
+def test_visualise_gan(tmpdir):
+    nb_samples = 64
+    vis = VisualiseGAN(nb_samples=nb_samples)
+
+    # can handle to many samples
+    samples = {'fake': np.random.random((2*nb_samples, 1, 8, 8))}
+    outname = tmpdir.join("vis_gan.png")
+    vis(samples, fname=str(outname))
+    assert outname.exists()
+
+    # raises if to few samples
+    samples = {'fake': np.random.random((nb_samples // 2, 1, 8, 8))}
+    outname = tmpdir.join("vis_gan_to_few.png")
+    with pytest.raises(Exception):
+        vis(samples, fname=str(tmpdir.join("vis_gan_to_few.png")))
+    assert not outname.exists()
+
+    samples = {'fake': np.random.random((nb_samples, 1, 8, 8))}
+    logs = {'samples': samples}
+
+    vis = VisualiseGAN(nb_samples=nb_samples, output_dir=str(tmpdir))
+    vis.on_epoch_end(0, logs)
+    assert tmpdir.join("00000.png").exists()
+
+
+def test_sample_gan():
+    mock = Mock()
+    fake = np.random.random((64, 1, 8, 8))
+
+    mock.sample.return_value = {'fake': fake}
+    discriminator_score = np.random.random((64, 1))
+    mock.discriminate.return_value = discriminator_score
+    real_data = np.random.random((64, 1, 8, 8))
+    z = np.random.random((64, 20))
+    sampler = SampleGAN(mock.sample, mock.discriminate, z, real_data,
+                        should_sample_func=lambda: True)
+    logs = {}
+    sampler.on_epoch_end(0, logs)
+    assert (z == mock.sample.call_args[0][0]).all()
+    assert (fake == mock.discriminate.call_args_list[0][0][0]).all()
+    assert (real_data == mock.discriminate.call_args_list[1][0][0]).all()
+    assert (logs['samples']['fake'] == fake).all()
+    assert (logs['samples']['real'] == real_data).all()
+    assert (logs['samples']['discriminator_on_fake'] == discriminator_score).all()
+    assert (logs['samples']['discriminator_on_real'] == discriminator_score).all()
+    assert (logs['samples']['z'] == z).all()
 
 
 def test_save_models(tmpdir):
