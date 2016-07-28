@@ -71,7 +71,7 @@ class WeightOrthRegularizer(Regularizer):
             p_normed = p_flat / (p_length.reshape((p_length.shape[0], 1)) + K.epsilon())
             dist = K.dot(p_normed, K.transpose(p_normed))
             dist *= (1 - K.eye(K.eval(self.p.shape[0])))
-            regularized_loss += K.mean(K.abs(dist))
+            regularized_loss += self.weight * K.mean(K.abs(dist))
         return K.in_train_phase(regularized_loss, loss)
 
     def get_config(self):
