@@ -46,6 +46,39 @@ class ActivityInBoundsRegularizer(Regularizer):
         }
 
 
+class WeightOrthRegularizer(Regularizer):
+    def __init__(self, weight=0.):
+        self.weight = K.cast_to_floatx(weight)
+        self.uses_learning_phase = True
+
+    def set_param(self, p):
+        self.p = p
+
+    def __call__(self, loss):
+        if not hasattr(self, 'p'):
+            raise Exception('Need to call `set_param` on '
+                            'WeightOrthRegularizer instance '
+                            'before calling the instance. '
+                            'Check that you are not passing '
+                            'a WeightRegularizer instead of an '
+                            'ActivityRegularizer '
+                            '(i.e. activity_regularizer="l2" instead '
+                            'of activity_regularizer="activity_l2".')
+        regularized_loss = loss
+        if self.weight:
+            p_flat = K.reshape(self.p, (self.p.shape[0], -1))
+            p_length = K.sqrt(K.sum(K.square(p_flat), axis=1) + K.epsilon())
+            p_normed = p_flat / (p_length.reshape((p_length.shape[0], 1)) + K.epsilon())
+            dist = K.dot(p_normed, K.transpose(p_normed))
+            dist *= (1 - K.eye(K.eval(self.p.shape[0])))
+            regularized_loss += K.mean(K.abs(dist))
+        return K.in_train_phase(regularized_loss, loss)
+
+    def get_config(self):
+        return {'name': self.__class__.__name__,
+                'weight': float(self.weight)}
+
+
 class SumOfActivityBelowRegularizer(Regularizer):
     def __init__(self, max_sum):
         warnings.warn("SumOfActivityBelowRegularizer is deprecated.")
