@@ -61,20 +61,28 @@ def test_sample_gan():
     mock.sample.return_value = {'fake': fake}
     discriminator_score = np.random.random((64, 1))
     mock.discriminate.return_value = discriminator_score
+    callback = Mock()
+
     real_data = np.random.random((64, 1, 8, 8))
     z = np.random.random((64, 20))
     sampler = SampleGAN(mock.sample, mock.discriminate, z, real_data,
-                        should_sample_func=lambda: True)
+                        callbacks=[callback],
+                        should_sample_func=lambda e: True)
     logs = {}
     sampler.on_epoch_end(0, logs)
+    assert callback.on_epoch_end.called
     assert (z == mock.sample.call_args[0][0]).all()
     assert (fake == mock.discriminate.call_args_list[0][0][0]).all()
     assert (real_data == mock.discriminate.call_args_list[1][0][0]).all()
-    assert (logs['samples']['fake'] == fake).all()
-    assert (logs['samples']['real'] == real_data).all()
-    assert (logs['samples']['discriminator_on_fake'] == discriminator_score).all()
-    assert (logs['samples']['discriminator_on_real'] == discriminator_score).all()
-    assert (logs['samples']['z'] == z).all()
+    assert 'samples' not in logs
+
+    cbk_logs = callback.on_epoch_end.call_args[0][1]
+    assert (cbk_logs['samples']['fake'] == fake).all()
+    assert (cbk_logs['samples']['fake'] == fake).all()
+    assert (cbk_logs['samples']['real'] == real_data).all()
+    assert (cbk_logs['samples']['discriminator_on_fake'] == discriminator_score).all()
+    assert (cbk_logs['samples']['discriminator_on_real'] == discriminator_score).all()
+    assert (cbk_logs['samples']['z'] == z).all()
 
 
 def test_save_models(tmpdir):

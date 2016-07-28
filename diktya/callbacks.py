@@ -15,11 +15,12 @@
 
 import os
 import json
+import copy
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from keras.callbacks import Callback
+from keras.callbacks import Callback, CallbackList
 import keras.backend as K
 
 from diktya.numpy import tile, image_save
@@ -38,12 +39,27 @@ class OnEpochEnd(Callback):
 
 
 class SampleGAN(Callback):
+    """
+    Keras callback that provides samples ``on_epoch_end`` to other callbacks.
+
+    Args:
+        sample_func: is called with ``z`` and should return fake samples.
+        discriminator_func: Should return the discriminator score.
+        z: Batch of random vectors
+        real_data: Batch of real data
+        callbacks: List of callbacks, called with the generated samples.
+        should_sample_func (optional): Gets the current epoch and returns
+            a bool if we should sample at the given epoch.
+
+    """
     def __init__(self, sample_func, discriminator_func, z, real_data,
+                 callbacks,
                  should_sample_func=None):
         self.sample_func = sample_func
         self.discriminator_func = discriminator_func
         self.z = z
         self.real_data = real_data
+        self.callback = CallbackList(callbacks)
         if should_sample_func is None:
             def should_sample_func(e):
                 return e % 10 == 0 or e <= 15
@@ -61,15 +77,33 @@ class SampleGAN(Callback):
     def on_train_begin(self, logs=None):
         if logs is None:
             logs = {}
-        logs['samples'] = self.sample()
+        cbks_logs = copy.copy(logs)
+        cbks_logs['samples'] = self.sample()
+        self.callback.on_train_begin(cbks_logs)
 
     def on_epoch_end(self, epoch, logs=None):
         if logs is None:
             logs = {}
-        logs['samples'] = self.sample()
+        if self.should_sample_func(epoch):
+            cbks_logs = copy.copy(logs)
+            cbks_logs['samples'] = self.sample()
+            self.callback.on_epoch_end(epoch, cbks_logs)
 
 
 class VisualiseGAN(Callback):
+    """
+    Visualise ``nb_samples`` fake images from the generator.
+
+    .. warning::
+        Cannot be used as normal keras callback.
+        Can only be used as callback for the SampleGAN callback.
+
+    Args:
+        nb_samples: number of samples
+        output_dir (optional): Save image to this directory. Format is ``{epoch:05d}``.
+        show (default: False): Show images as matplotlib plot
+        preprocess (optional): Apply this preprocessing function to the generated images.
+    """
     def __init__(self, nb_samples, output_dir=None, show=False, preprocess=None):
         self.nb_samples = nb_samples
         self.output_dir = output_dir
@@ -81,8 +115,7 @@ class VisualiseGAN(Callback):
             os.makedirs(self.output_dir, exist_ok=True)
 
     def on_train_begin(self, logs={}):
-        if 'samples' in logs:
-            self(logs['samples'], os.path.join(self.output_dir, "on_train_begin.png"))
+        self(logs['samples'], os.path.join(self.output_dir, "on_train_begin.png"))
 
     def call(self, samples):
         return tile(samples['fake'][:self.nb_samples])
@@ -103,13 +136,13 @@ class VisualiseGAN(Callback):
             image_save(fname, tiles)
 
     def on_epoch_end(self, epoch, logs={}):
-        epoch = epoch
-        if 'samples' in logs:
-            if self.output_dir is not None:
-                fname = os.path.join(self.output_dir, "{:05d}.png".format(epoch))
-            else:
-                fname = None
-            self(logs['samples'], fname)
+        if 'samples' not in logs:
+            raise Exception("VisualiseGAN cannot be used as normal keras callback. See docs.")
+        if self.output_dir is not None:
+            fname = os.path.join(self.output_dir, "{:05d}.png".format(epoch))
+        else:
+            fname = None
+        self(logs['samples'], fname)
 
 
 class SaveModels(Callback):
