@@ -280,14 +280,14 @@ class HistoryPerBatch(Callback):
             fig, _ = self.plot()
             fig.savefig(os.path.join(self.output_dir, "history.png"))
 
-    def plot(self, metrics=None, fig=None, axes=None, skip_first_batch=True,
+    def plot(self, metrics=None, fig=None, axes=None, skip_first_epoch=False,
              save_as=None):
         """
         Plots the losses and variance for every epoch.
 
         Args:
             metrics (list): this metric names will be plotted
-            skip_first_batch (bool): skip the first batch. Use full if the
+            skip_first_epoch (bool): skip the first epoch. Use full if the
                 first batch has a high loss and brakes the scaling of the loss
                 axis.
             fig: matplotlib figure
@@ -304,7 +304,7 @@ class HistoryPerBatch(Callback):
             axes = fig.add_subplot(111)
         if metrics is None:
             metrics = self.params['metrics']
-        if skip_first_batch:
+        if skip_first_epoch:
             start = 1
         else:
             start = 0
