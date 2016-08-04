@@ -195,26 +195,26 @@ class LearningRateScheduler(Callback):
 class AutomaticLearningRateScheduler(Callback):
     """
     This callback automatically reduces the learning rate of the `optimizer`.
-    If the ``metric`` did not improve by at least the ``min_improvment`` amount in
+    If the ``metric`` did not improve by at least the ``min_improvement`` amount in
     the last ``epoch_patience`` epochs, the learning rate of ``optimizer`` will be
     decreased by ``factor``.
 
     Args:
         optimizer (keras Optimizer): Decrease learning rate of this optimizer
         metric (str): Name of the metric
-        min_improvment (float): minimum-improvement
+        min_improvement (float): minimum-improvement
         epoch_patience (int): Number of epochs to wait until the metric decreases
         factor (float): Reduce learning rate by this factor
 
     """
-    def __init__(self, optimizer, metric='loss', min_improvment=0.001,
+    def __init__(self, optimizer, metric='loss', min_improvement=0.001,
                  epoch_patience=3, factor=0.25):
         assert hasattr(optimizer, 'lr')
         self.optimizer = optimizer
         self.metric = metric
         self.current_best = np.infty
         self.current_best_epoch = 0
-        self.min_improvment = min_improvment
+        self.min_improvement = min_improvement
         self.epoch_patience = epoch_patience
         self.epoch_log = []
         self.factor = factor
@@ -231,14 +231,14 @@ class AutomaticLearningRateScheduler(Callback):
 
     def on_epoch_end(self, epoch, logs={}):
         mean_loss = np.array(self.epoch_log).mean()
-        if mean_loss + self.min_improvment <= self.current_best:
+        if mean_loss + self.min_improvement <= self.current_best:
             self.current_best = mean_loss
             self.current_best_epoch = epoch
 
         if epoch - self.current_best_epoch > self.epoch_patience:
             lr = K.get_value(self.optimizer.lr)
             new_lr = lr*self.factor
-            self.min_improvment *= self.factor
+            self.min_improvement *= self.factor
             K.set_value(self.optimizer.lr, new_lr)
             print()
             print("Reduce learning rate to: {:08f}".format(new_lr))
