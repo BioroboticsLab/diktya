@@ -351,9 +351,12 @@ class DistributionCollection(Distribution, Normalization):
 
         self.dtype = [(name, "({},)float32".format(nb_elems))
                       for name, nb_elems in self.nb_elems.items()]
-        self.norm_dtype = [
-            (name, "({},)float32".format(nb_elems*len(norm.normalize(np.zeros((1,))))))
-            for name, (_, nb_elems, norm) in self._dist_nb_elems_norm.items()]
+        self.norm_nb_elems = OrderedDict([
+            (name, nb_elems*len(norm.normalize(np.zeros((1,)))))
+            for name, (_, nb_elems, norm) in self._dist_nb_elems_norm.items()
+        ])
+        self.norm_dtype = [(name, "({},)float32".format(nb_elems))
+                           for name, nb_elems in self.norm_nb_elems.items()]
 
         self.names = list(self.nb_elems.keys())
 
