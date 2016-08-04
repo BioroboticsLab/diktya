@@ -260,7 +260,9 @@ class HistoryPerBatch(Callback):
         self.output_dir = output_dir
 
     def on_epoch_begin(self, epoch, logs=None):
-        for k in self.history.keys():
+        for k in self.params['metrics']:
+            if k not in self.history:
+                self.history[k] = []
             self.history[k].append([])
 
     def on_batch_end(self, batch, logs={}):
