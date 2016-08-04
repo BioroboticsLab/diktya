@@ -13,4 +13,4 @@
 # limitations under the License.
 #
 
-from diktya.numpy.utils import tile, zip_tile, image_save  # noqa
+from diktya.numpy.utils import tile, zip_tile, image_save, scipy_gaussian_filter_2d  # noqa
