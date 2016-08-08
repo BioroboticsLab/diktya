@@ -16,7 +16,8 @@ import numpy as np
 
 from math import ceil
 from math import sqrt
-from scipy.misc import imsave
+from scipy.misc import toimage, bytescale
+
 
 def scipy_gaussian_filter_2d(x, sigma=2/3.):
     from scipy.ndimage.filters import gaussian_filter1d
@@ -70,11 +71,20 @@ def zip_tile(*arrs):
     return tiled[0]
 
 
-def image_save(fname, img_array):
+def image_save(fname, img_array, low=-1, high=1):
     """
     Saves the image ``img_array`` of shape ``(height, width)``,
     ``(1, height, width)``, or ``(3, height, width)`` to ``fname``.
+    The image range must be between ``low`` and ``high``.
     """
+    if img_array.min() < low:
+        raise Exception("Got an image with min {}, but low is set to {}."
+                        .format(img_array.min(), low))
+
+    if img_array.max() > high:
+        raise Exception("Got an image with max {}, but high is set to {}."
+                        .format(img_array.min(), low))
+
     ndim = len(img_array.shape)
     nb_channels = len(img_array)
     if ndim == 3 and nb_channels == 1:
@@ -85,5 +95,6 @@ def image_save(fname, img_array):
         img = img_array
     else:
         raise Exception("Did not understand image shape: {}".format(img_array.shape))
-    imsave(fname, img)
-
+    img_0_to_1 = (img - low) / (high - low)
+    img_bytes = bytescale(img_0_to_1 * 255, cmin=0, cmax=255)
+    toimage(img_bytes).save(fname)
