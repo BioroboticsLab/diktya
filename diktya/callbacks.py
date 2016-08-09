@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 
 from keras.callbacks import Callback, CallbackList
 import keras.backend as K
+import warnings
 
 from diktya.numpy import tile, image_save
 from diktya.func_api_helpers import save_model
@@ -256,28 +257,46 @@ class HistoryPerBatch(Callback):
             to index.
     """
     def __init__(self, output_dir=None):
-        self.history = {}
+        self.batch_history = {}
+        self.epoch_history = {}
         self.output_dir = output_dir
+
+    @property
+    def history(self):
+        warnings.warn(
+            "history property is deprecated. Use batch_history instead.", DeprecationWarning)
+        return self.batch_history
 
     def on_epoch_begin(self, epoch, logs=None):
         for k in self.params['metrics']:
-            if k not in self.history:
-                self.history[k] = []
-            self.history[k].append([])
+            if k not in self.batch_history:
+                self.batch_history[k] = []
+            self.batch_history[k].append([])
 
     def on_batch_end(self, batch, logs={}):
         for k in self.params['metrics']:
             if k not in logs:
                 continue
-            if k not in self.history:
-                self.history[k] = [[]]
-            self.history[k][-1].append(float(logs[k]))
+            if k not in self.batch_history:
+                self.batch_history[k] = [[]]
+            self.batch_history[k][-1].append(float(logs[k]))
+
+    def on_epoch_end(self, epoch, logs={}):
+        for metric in self.params['metrics']:
+            if metric not in logs:
+                continue
+            if metric not in self.epoch_history:
+                self.epoch_history[metric] = []
+            self.epoch_history[metric].append(float(logs[metric]))
 
     def on_train_end(self, logs={}):
         if self.output_dir is not None:
             os.makedirs(self.output_dir, exist_ok=True)
             with open(os.path.join(self.output_dir, "history.json"), 'w+') as f:
-                json.dump(self.history, f)
+                json.dump({
+                    'batch_history': self.batch_history,
+                    'epoch_history': self.epoch_history,
+                }, f)
 
             fig, _ = self.plot()
             fig.savefig(os.path.join(self.output_dir, "history.png"))

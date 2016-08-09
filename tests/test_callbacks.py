@@ -166,7 +166,7 @@ def test_history_per_batch(tmpdir):
     hist = HistoryPerBatch(str(tmpdir))
 
     hist.params = {}
-    hist.params['metrics'] = ['loss']
+    hist.params['metrics'] = ['loss', 'val_loss']
     hist.on_epoch_begin(0)
     losses = [[]]
     for i in range(5):
@@ -174,12 +174,7 @@ def test_history_per_batch(tmpdir):
         hist.on_batch_end(i, logs={'loss': loss})
         losses[-1].append(loss)
 
-    losses.append([])
-    hist.on_epoch_begin(1)
-    for i in range(5):
-        loss = float(np.random.sample(1))
-        hist.on_batch_end(i, logs={'loss': loss})
-        losses[-1].append(loss)
+    hist.on_epoch_end(0, logs={'loss': 1, 'val_loss': 2})
 
     losses.append([])
     hist.on_epoch_begin(1)
@@ -187,8 +182,22 @@ def test_history_per_batch(tmpdir):
         loss = float(np.random.sample(1))
         hist.on_batch_end(i, logs={'loss': loss})
         losses[-1].append(loss)
+    hist.on_epoch_end(1, logs={'loss': 1, 'val_loss': 2})
 
-    assert hist.history['loss'] == losses
+    losses.append([])
+    hist.on_epoch_begin(2)
+    for i in range(5):
+        loss = float(np.random.sample(1))
+        hist.on_batch_end(i, logs={'loss': loss})
+        losses[-1].append(loss)
+
+    hist.on_epoch_end(2, logs={'loss': 1, 'val_loss': 2})
+
+    with pytest.warns(DeprecationWarning):
+        assert hist.history['loss'] == losses
+
+    assert hist.epoch_history['loss'] == [1, 1, 1]
+    assert hist.epoch_history['val_loss'] == [2, 2, 2]
 
     hist.on_train_end()
     assert tmpdir.join("history.json").exists()
