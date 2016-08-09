@@ -12,6 +12,7 @@ setup(name='diktya',
             "pytest>=2.7.2",
             "scikit-image>=0.11.3",
             "dotmap>=1.1.2",
+            "pandas>=0.18"
             "h5py"
       ],
       packages=[

@@ -16,8 +16,10 @@
 import os
 import json
 import copy
+from collections import defaultdict
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 from keras.callbacks import Callback, CallbackList
@@ -302,7 +304,7 @@ class HistoryPerBatch(Callback):
             fig.savefig(os.path.join(self.output_dir, "history.png"))
 
     def plot(self, metrics=None, fig=None, axes=None, skip_first_epoch=False,
-             save_as=None):
+             save_as=None, batch_window_size=128, percentile=(1, 99)):
         """
         Plots the losses and variance for every epoch.
 
@@ -330,14 +332,33 @@ class HistoryPerBatch(Callback):
         else:
             start = 0
 
-        for label, epochs in self.history.items():
-            if label not in metrics:
+        rolling_args = {'window': batch_window_size,
+                        'min_periods': 0,
+                        'center': True}
+        has_batch_plot = defaultdict(lambda: False)
+        for label, epochs in self.batch_history.items():
+            if label not in metrics or len(epochs) <= start:
                 continue
-            means = np.array([np.mean(e) for e in epochs[start:]])
-            stds = np.array([np.std(e) for e in epochs[start:]])
-            epoch_labels = np.arange(start + 1, len(means) + start + 1)
-            axes.fill_between(epoch_labels, means-2*stds, means+2*stds, facecolor='gray', alpha=0.5)
+            values = np.concatenate(epochs[start:])
+            if len(values) < 1:
+                continue
+            rolling = pd.Series(values).rolling(**rolling_args)
+            means = rolling.mean()
+            upper = pd.Series(rolling.apply(np.percentile, args=[percentile[1]]))
+            upper = upper.rolling(**rolling_args).mean()
+            lower = pd.Series(rolling.apply(np.percentile, args=[percentile[0]]))
+            lower = lower.rolling(**rolling_args).mean()
+            nepochs = len(epochs) - start
+            epoch_labels = np.arange(start, nepochs+start, nepochs / len(means))
+            axes.fill_between(epoch_labels, lower, upper, facecolor='gray', alpha=0.5)
             axes.plot(epoch_labels, means, label=label)
+            has_batch_plot[label] = True
+
+        for label, epochs in self.epoch_history.items():
+            if label not in metrics or len(epochs) <= start and not has_batch_plot[label]:
+                continue
+            epoch_labels = np.arange(start, nepochs+start)
+            axes.plot(epoch_labels, epochs[start:], label=label)
 
         axes.legend()
         axes.set_xlabel('epoch')
