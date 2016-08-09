@@ -355,10 +355,11 @@ class HistoryPerBatch(Callback):
             has_batch_plot[label] = True
 
         for label, epochs in self.epoch_history.items():
-            if label not in metrics or len(epochs) <= start and not has_batch_plot[label]:
+            if label not in metrics or len(epochs) <= start or has_batch_plot[label]:
                 continue
-            epoch_labels = np.arange(start, nepochs+start)
-            axes.plot(epoch_labels, epochs[start:], label=label)
+            nepochs = len(epochs)
+            epoch_labels = np.arange(1, nepochs+1)
+            axes.plot(epoch_labels, epochs, label=label)
 
         axes.legend()
         axes.set_xlabel('epoch')
