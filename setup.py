@@ -19,6 +19,7 @@ setup(name='diktya',
           'diktya',
           'diktya.layers',
           'diktya.plot',
+          'diktya.preprocessing',
           'diktya.numpy',
           'diktya.theano',
       ])
