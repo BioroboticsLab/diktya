@@ -12,6 +12,7 @@ Welcome to diktya's documentation!
     api/blocks
     api/distributions
     api/layers/core
+    api/preprocessing/image
 
 
 `diktya` (Greek for networks) contains some complementary utilities
