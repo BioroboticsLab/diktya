@@ -1,3 +1,6 @@
+from collections import Iterable
+from numbers import Number
+from types import FunctionType
 import random
 
 import numpy as np
@@ -20,40 +23,80 @@ class ImageAugmentation:
 
 
 class RandomWarpAugmentation:
+    """
+    Perform random warping transformation on the input data.
+
+    Parameters can be either constant values, a list/tuple containing the lower and upper bounds
+    for a uniform distribution of a value generating functions:
+
+    Examples:
+        * RandomWarpAugmentation(rotation=0.5 * np.pi)
+        * RandomWarpAugmentation(rotation=(-0.25 * np.pi, 0.25 * np.pi))
+        * RandomWarpAugmentation(rotation=lambda: np.random.normal(0, np.pi))
+
+    Args:
+        fliph_probability: probability of random flips on horizontal (first) axis
+        flipv_probability: probability of random flips on vertial (second) axis
+        translation: translation of image data among all axis
+        rotation: rotation angle in counter-clockwise direction as radians
+        scale: scale as proportion of input size
+        shear: shear angle in counter-clockwise direction as radians.
+        use_diff: whether to use diffeomorphism augmentation (also known as elastic distortion)
+        diff_scale: scale parameter of diffeomorphism augmentation
+        diff_alpha: alpha parameter of diffeomorphism augmentation
+        diff_fix_border: fix_border parameter of diffeomorphism augmentation
+        augment_x: whether to augment input data
+        augment_y: whether to augment label data
+    """
     def __init__(self,
-                 flipx=lambda: random.getrandbits(1),
-                 flipy=lambda: random.getrandbits(1),
-                 translation=lambda: np.random.randint(-5, 5),
-                 rotation=lambda: np.random.uniform(-np.pi / 8, np.pi / 8),
-                 scale=lambda: np.random.uniform(0.9, 1.1),
-                 shear=lambda: np.random.uniform(-0.1 * np.pi, 0.1 * np.pi),
-                 use_diff=lambda: True,
-                 diff_scale=lambda: 8,
-                 diff_alpha=lambda: .75,
-                 diff_fix_border=lambda: False,
+                 fliph_probability=0.5,
+                 flipv_probability=0.5,
+                 translation=(-5, 5),
+                 rotation=(-np.pi / 8, np.pi / 8),
+                 scale=(0.9, 1.1),
+                 shear=(-0.1 * np.pi, 0.1 * np.pi),
+                 use_diff=True,
+                 diff_scale=8,
+                 diff_alpha=.75,
+                 diff_fix_border=False,
                  augment_x=True,
                  augment_y=False):
-        self.flipx = flipx
-        self.flipy = flipy
-        self.translation = translation
-        self.rotation = rotation
-        self.scale = scale
-        self.shear = shear
-        self.use_diff = use_diff
-        self.diff_scale = diff_scale
-        self.diff_alpha = diff_alpha
-        self.diff_fix_border = diff_fix_border
+        self.fliph_probability = self.parse_parameter(fliph_probability)
+        self.flipv_probability = self.parse_parameter(flipv_probability)
+        self.translation = self.parse_parameter(translation)
+        self.rotation = self.parse_parameter(rotation)
+        self.scale = self.parse_parameter(scale)
+        self.shear = self.parse_parameter(shear)
+        self.use_diff = self.parse_parameter(use_diff)
+        self.diff_scale = self.parse_parameter(diff_scale)
+        self.diff_alpha = self.parse_parameter(diff_alpha)
+        self.diff_fix_border = self.parse_parameter(diff_fix_border)
         self.augment_x = augment_x
         self.augment_y = augment_y
 
     @staticmethod
-    def center_transform(transform, shape):
+    def parse_parameter(param):
+        if isinstance(param, Iterable):
+            if len(param) != 2:
+                raise ValueError('lower and upper bound required')
+            lower, upper = param
+            return lambda: np.random.uniform(lower, upper)
+        elif isinstance(param, Number):
+            return lambda: param
+        elif isinstance(param, FunctionType):
+            return param
+        else:
+            raise TypeError('parameters must either be bounds for a uniform distribution,' +
+                            'a single value or a value generating function')
+
+    @staticmethod
+    def _center_transform(transform, shape):
         center_transform = AffineTransform(translation=(-shape[0] // 2, -shape[1] // 2))
         uncenter_transform = AffineTransform(translation=(shape[0] // 2, shape[1] // 2))
         return center_transform + transform + uncenter_transform
 
     @staticmethod
-    def get_frame(shape, line_width, blur=8):
+    def _get_frame(shape, line_width, blur=8):
         frame = np.zeros(shape)
         frame[:, :line_width] = 1
         frame[:, -line_width:] = 1
@@ -61,15 +104,16 @@ class RandomWarpAugmentation:
         frame[-line_width:, :] = 1
         return frame
 
-    def get_random_affine(self, shape):
+    def _get_random_affine(self, shape):
         t = AffineTransform(scale=(self.scale(), self.scale()),
                             rotation=self.rotation(),
                             shear=self.shear(),
                             translation=self.translation())
-        return RandomWarpAugmentation.center_transform(t, shape)
+        return self._center_transform(t, shape)
 
-    def get_diffeomorphism(self, shape, scale=30, alpha=1.,
-                           fix_border=True, random=np.random.uniform):
+    @staticmethod
+    def _get_diffeomorphism(shape, scale=30, alpha=1., fix_border=True,
+                            random=np.random.uniform):
         """
         Returns a diffeomorphism mapping that can be used wtih ``diff_warp``.
 
@@ -93,7 +137,7 @@ class RandomWarpAugmentation:
         intensity = 0.25 * alpha * 1 / rel_scale
         diff_map = np.clip(random(-intensity, intensity, (dh, dw, 2)), -intensity, intensity)
         if fix_border:
-            frame = RandomWarpAugmentation.get_frame((dh, dw), 1)
+            frame = RandomWarpAugmentation._get_frame((dh, dw), 1)
             for i in (0, 1):
                 diff_map[:, :, i] = diff_map[:, :, i] * (1 - frame)
 
@@ -101,21 +145,21 @@ class RandomWarpAugmentation:
         return diff_map
 
     def get_random_diffeomorphism(self, shape):
-        return self.get_diffeomorphism(shape,
-                                       scale=self.diff_scale(),
-                                       alpha=self.diff_alpha(),
-                                       fix_border=self.diff_fix_border())
+        return self._get_diffeomorphism(shape,
+                                        scale=self.diff_scale(),
+                                        alpha=self.diff_alpha(),
+                                        fix_border=self.diff_fix_border())
 
-    def diff_warp(self, diff_map, transform=None, flipx=False, flipy=False):
+    def diff_warp(self, diff_map, transform=None, flipv=False, fliph=False):
         def f(xy):
             xi = xy[:, 0].astype(np.int)
             yi = xy[:, 1].astype(np.int)
             off = xy + diff_map[yi, xi]
             if transform is not None:
                 off = transform(off)
-            if flipx:
+            if flipv:
                 off = off[::-1, :]
-            if flipy:
+            if fliph:
                 off = off[:, ::-1]
             return off
 
@@ -125,9 +169,11 @@ class RandomWarpAugmentation:
         if self.augment_x and self.augment_y:
             assert (x.shape == y.shape)
 
-        transform = self.get_random_affine(x.shape)
+        transform = self._get_random_affine(x.shape)
         diff = self.get_random_diffeomorphism(x.shape)
-        warp_f = self.diff_warp(diff, transform, self.flipx(), self.flipy())
+        warp_f = self.diff_warp(diff, transform,
+                                bool(random.random() < self.flipv_probability()),
+                                bool(random.random() < self.fliph_probability()))
 
         if self.augment_x:
             x = warp(x, warp_f, order=3)
