@@ -1,6 +1,7 @@
 import keras.backend as K
 from diktya.regularizers import WeightOrthRegularizer
 
+
 def test_weight_orth_regularizer():
     reg = WeightOrthRegularizer(weight=1.)
     loss = K.variable(0.)

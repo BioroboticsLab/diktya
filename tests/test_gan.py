@@ -82,7 +82,7 @@ def simple_gan():
     generator = sequential([
         Dense(4*simple_gan_nb_z, activation='relu', name='g1'),
         Dense(4*simple_gan_nb_z, activation='relu', name='g2'),
-        Dense(simple_gan_nb_out,  name='g_loss'),
+        Dense(simple_gan_nb_out, name='g_loss'),
     ])(z)
 
     d_input = Input(batch_shape=simple_gan_real_shape, name='data')
@@ -96,7 +96,7 @@ def simple_gan():
     ])(d_input)
     g = Model(z, generator)
     g.compile(Adam(lr=0.0002, beta_1=0.5), {'g_loss': 'binary_crossentropy'})
-    d = Model(d_input,  discriminator)
+    d = Model(d_input, discriminator)
     d.compile(Adam(lr=0.0002, beta_1=0.5), {'d_loss': 'binary_crossentropy'})
     return GAN(g, d)
 

@@ -68,8 +68,8 @@ class RandomWarpAugmentation:
                             translation=self.translation())
         return RandomWarpAugmentation.center_transform(t, shape)
 
-
-    def get_diffeomorphism(self, shape, scale=30, alpha=1., fix_border=True, random=np.random.uniform):
+    def get_diffeomorphism(self, shape, scale=30, alpha=1.,
+                           fix_border=True, random=np.random.uniform):
         """
         Returns a diffeomorphism mapping that can be used wtih ``diff_warp``.
 
@@ -78,7 +78,8 @@ class RandomWarpAugmentation:
             scale: Scale of the diffeomorphism in pixels.
             alpha (float): Intensity of the diffeomorphism. Must be between 0 and 1
             fix_border (boolean): If true the border of the resulting image stay constant.
-            random: Function to draw the randomness.  Will be called with ``random(-intensity, intensity, shape)``.
+            random: Function to draw the randomness.  Will be called with
+                    ``random(-intensity, intensity, shape)``.
         """
         h, w = shape
         if h == min(h, w):

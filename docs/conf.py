@@ -234,17 +234,17 @@ htmlhelp_basename = 'diktyadoc'
 # -- Options for LaTeX output ---------------------------------------------
 
 latex_elements = {
-# The paper size ('letterpaper' or 'a4paper').
-#'papersize': 'letterpaper',
+    # The paper size ('letterpaper' or 'a4paper').
+    #'papersize': 'letterpaper',
 
-# The font size ('10pt', '11pt' or '12pt').
-#'pointsize': '10pt',
+    # The font size ('10pt', '11pt' or '12pt').
+    #'pointsize': '10pt',
 
-# Additional stuff for the LaTeX preamble.
-#'preamble': '',
+    # Additional stuff for the LaTeX preamble.
+    #'preamble': '',
 
-# Latex figure (float) alignment
-#'figure_align': 'htbp',
+    # Latex figure (float) alignment
+    #'figure_align': 'htbp',
 }
 
 # Grouping the document tree into LaTeX files. List of tuples
@@ -369,4 +369,4 @@ def linkcode_resolve(domain, info):
     git_rev, err = p.communicate()
     git_rev = git_rev.decode('utf-8').rstrip('\n')
     return "https://github.com/BioroboticsLab/diktya/blob/{}/diktya/{}{}".format(
-       git_rev, fn, linespec)
+        git_rev, fn, linespec)

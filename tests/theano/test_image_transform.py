@@ -11,9 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import random
-
-from colorsys import hsv_to_rgb
 import theano
 import numpy as np
 from diktya.theano.image_transform import upsample, resize_interpolate

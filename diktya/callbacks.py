@@ -55,6 +55,7 @@ class SampleGAN(Callback):
             a bool if we should sample at the given epoch.
 
     """
+
     def __init__(self, sample_func, discriminator_func, z, real_data,
                  callbacks,
                  should_sample_func=None):
@@ -107,6 +108,7 @@ class VisualiseGAN(Callback):
         show (default: False): Show images as matplotlib plot
         preprocess (optional): Apply this preprocessing function to the generated images.
     """
+
     def __init__(self, nb_samples, output_dir=None, show=False, preprocess=None):
         self.nb_samples = nb_samples
         self.output_dir = output_dir
@@ -181,6 +183,7 @@ class LearningRateScheduler(Callback):
        optimizer (keras Optimizer): schedule the learning rate of this optimizer
        schedule
     """
+
     def __init__(self, optimizer, schedule):
         assert hasattr(optimizer, 'lr')
         self.optimizer = optimizer
@@ -210,6 +213,7 @@ class AutomaticLearningRateScheduler(Callback):
         factor (float): Reduce learning rate by this factor
 
     """
+
     def __init__(self, optimizer, metric='loss', min_improvement=0.001,
                  epoch_patience=3, factor=0.25):
         assert hasattr(optimizer, 'lr')
@@ -258,6 +262,7 @@ class HistoryPerBatch(Callback):
         history: history of every batch. Use ``history[metric_name][epoch][batch]``
             to index.
     """
+
     def __init__(self, output_dir=None):
         self.batch_history = {}
         self.epoch_history = {}

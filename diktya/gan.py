@@ -17,9 +17,9 @@ from keras.engine.training import Model, collect_trainable_weights
 import keras.backend as K
 
 from diktya.models import AbstractModel
-from diktya.func_api_helpers import get_layer, keras_copy, trainable, name_tensor, \
-    concat
+from diktya.func_api_helpers import get_layer, keras_copy, concat
 from collections import OrderedDict
+
 
 def _listify(x):
     if type(x) != list:
@@ -71,6 +71,7 @@ class GAN(AbstractModel):
 
         gan.fit_generator(...)
     """
+
     def __init__(self, generator: Model, discriminator: Model):
         self.g = generator
         assert hasattr(self.g, 'optimizer'), "Did you forgot to call model.compile(...)?"
@@ -155,7 +156,8 @@ class GAN(AbstractModel):
                 geneator. It can either be a numpy array, a list or dict.
                     * **numpy array**: ``real``
                     * **list**: ``[real]``, ``[real, z]``
-                    * **dict**: ``{'real': real}``, ``{'real': real, 'z': z}``, ``{'real': real, 'z': z, 'additional_input', x}``
+                    * **dict**: ``{'real': real}``, ``{'real': real, 'z': z}``,
+                                ``{'real': real, 'z': z, 'additional_input', x}``
             generator_inputs (optional dict): This inputs will only be passed to
                 the generator.
             discriminator_inputs (optional dict): This inputs will only be passed to

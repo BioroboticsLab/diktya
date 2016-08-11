@@ -132,6 +132,7 @@ def gaussian_filter_2d_variable_sigma(input, sigmas,
                                       border_mode='zero'
                                       ):
     warnings.warn("gaussian_filter_2d_variable_sigma takes forever to compile.")
+
     def filter_sigma(idx, kernel):
         dimpattern_w = ('x', 'x', 'x', 0)
         dimpattern_h = ('x', 'x', 0, 'x')

@@ -16,7 +16,6 @@ from __future__ import absolute_import
 from __future__ import print_function
 from keras.engine.training import make_batches, slice_X
 import numpy as np
-import pprint
 
 from keras import callbacks as cbks
 from keras.utils.generic_utils import Progbar

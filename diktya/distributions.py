@@ -215,6 +215,7 @@ class TruncNormal(Distribution):
     """
     Normal distribution truncated between [a;b].
     """
+
     def __init__(self, a, b, mean, std):
         self.a = a
         self.b = b

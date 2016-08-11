@@ -17,7 +17,6 @@ import theano.tensor as T
 import theano
 
 
-
 class Subtensor(Layer):
     """
     Selects only a part of the input.
@@ -27,6 +26,7 @@ class Subtensor(Layer):
         stop (int): Stop index
         axis (int): Index along this axis
     """
+
     def __init__(self, start, stop, step=1, axis=0, **kwargs):
         super(Subtensor, self).__init__(**kwargs)
         self.start = start
@@ -142,6 +142,7 @@ class ZeroGradient(Layer):
     Consider the gradient allways zero.
     Wraps the ``theano.gradient.zero_grad`` function.
     """
+
     def call(self, x, mask=None):
         return theano.gradient.zero_grad(x)
 
@@ -159,6 +160,7 @@ class InBounds(Layer):
         weight: The regularization loss is multiplied by this
 
     """
+
     def __init__(self, low=-1, high=1, clip=False, weight=1, **kwargs):
         self.low = low
         self.high = high
@@ -202,6 +204,7 @@ class BatchLoss(Layer):
         normalize (bool): Normalize the output by the std and mean of the batch during training.
         weight (float): Weight of the regularization loss
     """
+
     def __init__(self, axis=1, normalize=True,
                  l1=0., l2=0., **kwargs):
         self.axis = axis

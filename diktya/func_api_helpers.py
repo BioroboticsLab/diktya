@@ -236,6 +236,7 @@ def load_model(fname, custom_objects={}):
     model.load_weights(fname)
     return model
 
+
 def get_hdf5_attr(fname, attr_name):
     """Returns the toplevel attribute ``attr_name`` of the hdf5 file ``fname``."""
     f = h5py.File(fname, 'r')

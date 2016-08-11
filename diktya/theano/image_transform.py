@@ -152,5 +152,3 @@ def _meshgrid(height, width):
     ones = T.ones_like(x_t_flat)
     grid = T.concatenate([x_t_flat, y_t_flat, ones], axis=0)
     return grid
-
-
