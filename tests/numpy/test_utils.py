@@ -75,8 +75,9 @@ def test_image_save(tmpdir):
         image_save(str(tmpdir.join("one_channel.png")), x)
 
     # test scale
-    x = 0.5*np.random.random((64, 64)) + 0.1
+    x = 0.5*np.linspace(0, 1, 64*64).reshape((64, 64)) + 0.1
     image_save(str(tmpdir.join("scale.png")), x, low=0, high=1)
     loaded_x = imread(str(tmpdir.join("scale.png")))
-    assert 0.1 <= (loaded_x / 255.).min()
+    assert 0.1 <= x.min()
+    assert np.abs(0.1 - (loaded_x / 255.).min()) <= 1/256
     assert (loaded_x / 255.).max() <= 0.6
