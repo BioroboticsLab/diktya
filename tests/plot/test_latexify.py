@@ -18,8 +18,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib as mpl
 import copy
+import pytest
+import os
 
 
+@pytest.mark.skipif("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true",
+                    reason="No pdflatex on travis. Skipping this test on Travis CI.")
 def test_latexify(outdir):
     rc_default = copy.copy(mpl.rcParams)
     assert mpl.rcParams["pgf.texsystem"] != "pdflatex"
