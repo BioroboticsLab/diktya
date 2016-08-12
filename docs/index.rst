@@ -13,6 +13,7 @@ Welcome to diktya's documentation!
     api/distributions
     api/layers/core
     api/preprocessing/image
+    api/plot/latexify
 
 
 `diktya` (Greek for networks) contains some complementary utilities

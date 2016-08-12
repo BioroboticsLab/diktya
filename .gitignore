@@ -1,5 +1,6 @@
 # ignore test output directory
 tests_out/
+tests/out/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

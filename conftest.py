@@ -42,3 +42,12 @@ def astronaut():
     astronaut = skimage.data.astronaut() / 255.
     astronaut = skimage.color.rgb2gray(astronaut)
     return cast_to_floatx(astronaut[::4, ::4])
+
+
+@pytest.fixture
+def outdir():
+    from py.path import local
+    path = local("tests").join("out")
+    if not path.ensure(dir=True):
+        path.mkdir()
+    return path
