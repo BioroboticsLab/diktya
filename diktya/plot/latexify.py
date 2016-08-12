@@ -60,7 +60,7 @@ _default_latexify_style = {
     "font.monospace": [],
     "axes.labelsize": 10,               # LaTeX default is 10pt font.
     "font.size": 10,
-    "legend.fontsize": 9,               # Make the legend/label fonts a little smaller
+    "legend.fontsize": 8,               # Make the legend/label fonts a little smaller
     "xtick.labelsize": 8,
     "ytick.labelsize": 8,
     "pgf.preamble": [
