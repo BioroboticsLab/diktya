@@ -10,7 +10,10 @@ diktya (Greek for networks) contains some complementary utilities for theano and
 * Callbacks for learning rate scheduling and history recording.
 * Image augmentation (including diffeomorphism)
 
-License 
+Read the documentation at  `ditkya.readthedocs.io <http://diktya.readthedocs.io/en/latest/>`_.
+
+
+License
 -------
 
 Copyright 2016 Leon Sixt, Benjamin Wild (Biorobotics Lab, Berlin)
