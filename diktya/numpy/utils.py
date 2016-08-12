@@ -73,8 +73,15 @@ def zip_tile(*arrs):
 
 def image_save(fname, img_array, low=-1, high=1):
     """
-    Saves the image ``img_array`` of shape ``(height, width)``,
-    ``(1, height, width)``, or ``(3, height, width)`` to ``fname``.
+    Saves the image ``img_array`` to ``fname``.
+
+    Args:
+        fname: Save image under this filename
+        img_array: array of shape ``(height, width)``, ``(1, height, width)``,
+            or ``(3, height, width)``.
+        low: Lowest pixel value
+        high: Highest pixel value.
+
     The image range must be between ``low`` and ``high``.
     """
     if img_array.min() < low:
@@ -95,6 +102,10 @@ def image_save(fname, img_array, low=-1, high=1):
         img = img_array
     else:
         raise Exception("Did not understand image shape: {}".format(img_array.shape))
-    img_0_to_1 = (img - low) / (high - low)
-    img_bytes = bytescale(img_0_to_1 * 255, cmin=0, cmax=255)
+
+    if img_array.dtype == np.uint8:
+        img_bytes = img_array
+    else:
+        img_0_to_1 = (img - low) / (high - low)
+        img_bytes = bytescale(img_0_to_1 * 255, cmin=0, cmax=255)
     toimage(img_bytes).save(fname)
