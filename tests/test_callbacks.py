@@ -15,7 +15,6 @@
 
 import numpy as np
 
-from conftest import TEST_OUTPUT_DIR
 from diktya.callbacks import SaveModels, LearningRateScheduler, \
     AutomaticLearningRateScheduler, HistoryPerBatch, VisualiseGAN, SampleGAN
 from keras.models import Sequential
@@ -204,7 +203,7 @@ def test_history_per_batch(tmpdir):
     assert tmpdir.join("history.png").exists()
 
 
-def test_history_per_batch_plot():
+def test_history_per_batch_plot(outdir):
     hist = HistoryPerBatch()
     hist.params = {}
     hist.params['metrics'] = ['loss']
@@ -220,8 +219,8 @@ def test_history_per_batch_plot():
         hist.on_epoch_end(b)
 
     fig, axes = hist.plot()
-    path1 = TEST_OUTPUT_DIR + "/callback_history.png"
+    path1 = str(outdir.join("callback_history.png"))
     fig.savefig(path1)
-    path2 = TEST_OUTPUT_DIR + "/callback_history2.png"
+    path2 = str(outdir.join("callback_history2.png"))
     hist.plot(save_as=path2)
     filecmp.cmp(path1, path2)

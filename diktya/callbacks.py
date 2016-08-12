@@ -19,7 +19,6 @@ import copy
 from collections import defaultdict
 
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 
 from keras.callbacks import Callback, CallbackList
@@ -29,6 +28,7 @@ import warnings
 from diktya.numpy import tile, image_save
 from diktya.func_api_helpers import save_model
 from diktya.plot.tiles import plt_imshow
+from diktya.plot import plot_rolling_percentile
 
 
 class OnEpochEnd(Callback):
@@ -308,7 +308,7 @@ class HistoryPerBatch(Callback):
             fig, _ = self.plot()
             fig.savefig(os.path.join(self.output_dir, "history.png"))
 
-    def plot(self, metrics=None, fig=None, axes=None, skip_first_epoch=False,
+    def plot(self, metrics=None, fig=None, ax=None, skip_first_epoch=False,
              save_as=None, batch_window_size=128, percentile=(1, 99)):
         """
         Plots the losses and variance for every epoch.
@@ -319,17 +319,17 @@ class HistoryPerBatch(Callback):
                 first batch has a high loss and brakes the scaling of the loss
                 axis.
             fig: matplotlib figure
-            axes: matplotlib axes
+            ax: matplotlib axes
             save_as (str): Save figure under this path. If ``save_as`` is a
                 relative path and ``self.output_dir`` is set, it is appended to
                 ``self.output_dir``.
         Returns:
             A tuple of fig, axes
         """
-        if fig is None and axes is None:
+        if fig is None and ax is None:
             fig = plt.figure()
-        if axes is None:
-            axes = fig.add_subplot(111)
+        if ax is None:
+            ax = fig.add_subplot(111)
         if metrics is None:
             metrics = self.params['metrics']
         if skip_first_epoch:
@@ -337,9 +337,6 @@ class HistoryPerBatch(Callback):
         else:
             start = 0
 
-        rolling_args = {'window': batch_window_size,
-                        'min_periods': 0,
-                        'center': True}
         has_batch_plot = defaultdict(lambda: False)
         for label, epochs in self.batch_history.items():
             if label not in metrics or len(epochs) <= start:
@@ -347,16 +344,10 @@ class HistoryPerBatch(Callback):
             values = np.concatenate(epochs[start:])
             if len(values) < 1:
                 continue
-            rolling = pd.Series(values).rolling(**rolling_args)
-            means = rolling.mean()
-            upper = pd.Series(rolling.apply(np.percentile, args=[percentile[1]]))
-            upper = upper.rolling(**rolling_args).mean()
-            lower = pd.Series(rolling.apply(np.percentile, args=[percentile[0]]))
-            lower = lower.rolling(**rolling_args).mean()
             nepochs = len(epochs) - start
-            epoch_labels = np.arange(start, nepochs+start, nepochs / len(means))
-            axes.fill_between(epoch_labels, lower, upper, facecolor='gray', alpha=0.5)
-            axes.plot(epoch_labels, means, label=label)
+            plot_rolling_percentile((start, nepochs + 1), values, label=label,
+                                    batch_window_size=batch_window_size,
+                                    percentile=percentile, ax=ax)
             has_batch_plot[label] = True
 
         for label, epochs in self.epoch_history.items():
@@ -364,15 +355,15 @@ class HistoryPerBatch(Callback):
                 continue
             nepochs = len(epochs)
             epoch_labels = np.arange(1, nepochs+1)
-            axes.plot(epoch_labels, epochs, label=label)
+            ax.plot(epoch_labels, epochs, label=label)
 
-        axes.legend()
-        axes.set_xlabel('epoch')
-        axes.set_ylabel('loss')
+        ax.legend()
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Loss')
         if save_as:
             if not os.path.isabs(save_as) and self.output_dir:
                 path = os.path.join(self.output_dir, save_as)
             else:
                 path = save_as
             fig.savefig(path)
-        return fig, axes
+        return fig, ax
