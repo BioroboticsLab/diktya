@@ -268,6 +268,13 @@ class HistoryPerBatch(Callback):
         self.epoch_history = {}
         self.output_dir = output_dir
 
+    @staticmethod
+    def from_config(batch_history, epoch_history):
+        hist = HistoryPerBatch()
+        hist.batch_history = batch_history
+        hist.epoch_history = epoch_history
+        return hist
+
     @property
     def history(self):
         warnings.warn(
@@ -309,7 +316,9 @@ class HistoryPerBatch(Callback):
             fig.savefig(os.path.join(self.output_dir, "history.png"))
 
     def plot(self, metrics=None, fig=None, ax=None, skip_first_epoch=False,
-             save_as=None, batch_window_size=128, percentile=(1, 99)):
+             use_every_nth_batch=1, save_as=None, batch_window_size=128, percentile=(1, 99),
+             end=None,
+             ):
         """
         Plots the losses and variance for every epoch.
 
@@ -332,6 +341,9 @@ class HistoryPerBatch(Callback):
             ax = fig.add_subplot(111)
         if metrics is None:
             metrics = self.params['metrics']
+        if end is None:
+            end = len(next(iter(self.batch_history.values()))) + 1
+
         if skip_first_epoch:
             start = 1
         else:
@@ -341,11 +353,11 @@ class HistoryPerBatch(Callback):
         for label, epochs in self.batch_history.items():
             if label not in metrics or len(epochs) <= start:
                 continue
-            values = np.concatenate(epochs[start:])
+            values = np.concatenate(epochs[start:end])
+            values = values[::use_every_nth_batch]
             if len(values) < 1:
                 continue
-            nepochs = len(epochs) - start
-            plot_rolling_percentile((start, nepochs + 1), values, label=label,
+            plot_rolling_percentile((start, end), values, label=label,
                                     batch_window_size=batch_window_size,
                                     percentile=percentile, ax=ax)
             has_batch_plot[label] = True
