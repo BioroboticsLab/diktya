@@ -258,15 +258,20 @@ class HistoryPerBatch(Callback):
 
     Args:
         output_dir (optional str): Save history and plot to this directory.
+        extra_metrics (optional list): Also montior this metrics.
+
     Attributes:
-        history: history of every batch. Use ``history[metric_name][epoch][batch]``
-            to index.
+        batch_history: history of every batch.
+            Use ``batch_history[metric_name][epoch_idx][batch_idx]`` to index.
+        epoch_history: history of every epoch.
+            Use ``epoch_history[metric_name][epoch_idx]`` to index.
     """
 
-    def __init__(self, output_dir=None):
+    def __init__(self, output_dir=None, extra_metrics=None):
         self.batch_history = {}
         self.epoch_history = {}
         self.output_dir = output_dir
+        self.extra_metrics = extra_metrics or []
 
     @staticmethod
     def from_config(batch_history, epoch_history):
@@ -281,14 +286,19 @@ class HistoryPerBatch(Callback):
             "history property is deprecated. Use batch_history instead.", DeprecationWarning)
         return self.batch_history
 
+    @property
+    def metrics(self):
+        """List of metrics to montior."""
+        return self.params['metrics'] + self.extra_metrics
+
     def on_epoch_begin(self, epoch, logs=None):
-        for k in self.params['metrics']:
+        for k in self.metrics:
             if k not in self.batch_history:
                 self.batch_history[k] = []
             self.batch_history[k].append([])
 
     def on_batch_end(self, batch, logs={}):
-        for k in self.params['metrics']:
+        for k in self.metrics:
             if k not in logs:
                 continue
             if k not in self.batch_history:
@@ -296,7 +306,7 @@ class HistoryPerBatch(Callback):
             self.batch_history[k][-1].append(float(logs[k]))
 
     def on_epoch_end(self, epoch, logs={}):
-        for metric in self.params['metrics']:
+        for metric in self.metrics:
             if metric not in logs:
                 continue
             if metric not in self.epoch_history:
@@ -340,7 +350,7 @@ class HistoryPerBatch(Callback):
         if ax is None:
             ax = fig.add_subplot(111)
         if metrics is None:
-            metrics = self.params['metrics']
+            metrics = self.metrics
         if end is None:
             end = len(next(iter(self.batch_history.values()))) + 1
 
