@@ -313,6 +313,28 @@ class HistoryPerBatch(Callback):
                 self.epoch_history[metric] = []
             self.epoch_history[metric].append(float(logs[metric]))
 
+    def plot_callback(self, fname=None, every_nth_epoch=1, **kwargs):
+        """
+        Returns a keras callback that plots this figure ``on_epoch_end``.
+
+        Args:
+            fname (optional str): filename where to save the plot. Default is
+                ``{self.output}/history.png``
+            every_nth_epoch: Plot frequency
+            **kwargs: Passed to ``self.plot(**kwargs)``
+        """
+        if fname is None and self.output_dir is None:
+            raise Exception("fname must be given, if output_dir is not set.")
+        if fname is None:
+            fname = os.path.join(self.output_dir, "history.png")
+
+        def plot_and_save(epoch, log={}):
+            fig, ax = self.plot(**kwargs)
+            fig.savefig(fname)
+            plt.close(fig)
+
+        return OnEpochEnd(plot_and_save, every_nth_epoch=every_nth_epoch)
+
     def save(self, fname=None):
         if fname is None and self.output_dir is None:
             raise Exception("fname must be given, if output_dir is not set.")
