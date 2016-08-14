@@ -313,17 +313,25 @@ class HistoryPerBatch(Callback):
                 self.epoch_history[metric] = []
             self.epoch_history[metric].append(float(logs[metric]))
 
+    def save(self, fname=None):
+        if fname is None and self.output_dir is None:
+            raise Exception("fname must be given, if output_dir is not set.")
+        if fname is None:
+            fname = os.path.join(self.output_dir, "history.json")
+        os.makedirs(self.output_dir, exist_ok=True)
+        with open(fname, 'w+') as f:
+            json.dump({
+                'batch_history': self.batch_history,
+                'epoch_history': self.epoch_history,
+            }, f)
+
     def on_train_end(self, logs={}):
         if self.output_dir is not None:
             os.makedirs(self.output_dir, exist_ok=True)
-            with open(os.path.join(self.output_dir, "history.json"), 'w+') as f:
-                json.dump({
-                    'batch_history': self.batch_history,
-                    'epoch_history': self.epoch_history,
-                }, f)
-
+            self.save()
             fig, _ = self.plot()
             fig.savefig(os.path.join(self.output_dir, "history.png"))
+            plt.close(fig)
 
     def plot(self, metrics=None, fig=None, ax=None, skip_first_epoch=False,
              use_every_nth_batch=1, save_as=None, batch_window_size=128, percentile=(1, 99),
