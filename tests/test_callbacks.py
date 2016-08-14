@@ -14,18 +14,105 @@
 #
 
 import numpy as np
-
-from diktya.callbacks import SaveModels, LearningRateScheduler, \
-    AutomaticLearningRateScheduler, HistoryPerBatch, VisualiseGAN, SampleGAN
-from keras.models import Sequential
-from keras.layers.core import Dense
-from keras.optimizers import Adam
-import keras.backend as K
 import os
+import h5py
 import filecmp
 import pytest
 import seaborn  # noqa
 from unittest.mock import Mock
+
+from diktya.callbacks import SaveModels, LearningRateScheduler, \
+    AutomaticLearningRateScheduler, HistoryPerBatch, VisualiseGAN, SampleGAN, \
+    SaveModelAndWeightsCheckpoint
+from keras.models import Sequential
+from keras.layers.core import Dense
+from keras.optimizers import Adam
+from keras.utils.test_utils import get_test_data
+from keras.utils import np_utils
+import keras.backend as K
+
+
+np.random.seed(1337)
+
+
+def test_SaveModelAndWeightsCheckpoint():
+    # adapted from keras tests for ModelCheckpoint
+
+    input_dim = 2
+    nb_hidden = 4
+    nb_class = 2
+    batch_size = 5
+    train_samples = 20
+    test_samples = 20
+
+    filepath = 'checkpoint.h5'
+    (X_train, y_train), (X_test, y_test) = get_test_data(nb_train=train_samples,
+                                                         nb_test=test_samples,
+                                                         input_shape=(input_dim,),
+                                                         classification=True,
+                                                         nb_class=nb_class)
+    y_test = np_utils.to_categorical(y_test)
+    y_train = np_utils.to_categorical(y_train)
+    # case 1
+    monitor = 'val_loss'
+    save_best_only = False
+    mode = 'auto'
+
+    model = Sequential()
+    model.add(Dense(nb_hidden, input_dim=input_dim, activation='relu'))
+    model.add(Dense(nb_class, activation='softmax'))
+    model.compile(loss='categorical_crossentropy',
+                  optimizer='rmsprop',
+                  metrics=['accuracy'])
+
+    cbks = [SaveModelAndWeightsCheckpoint(
+        filepath, monitor=monitor, save_best_only=save_best_only, mode=mode)]
+    model.fit(X_train, y_train, batch_size=batch_size,
+              validation_data=(X_test, y_test), callbacks=cbks, nb_epoch=1)
+    assert os.path.exists(filepath)
+    os.remove(filepath)
+
+    # case 2
+    mode = 'min'
+    cbks = [SaveModelAndWeightsCheckpoint(
+        filepath, monitor=monitor, save_best_only=save_best_only, mode=mode)]
+    model.fit(X_train, y_train, batch_size=batch_size,
+              validation_data=(X_test, y_test), callbacks=cbks, nb_epoch=1)
+    assert os.path.exists(filepath)
+    os.remove(filepath)
+
+    # case 3
+    mode = 'max'
+    monitor = 'val_acc'
+    cbks = [SaveModelAndWeightsCheckpoint(
+        filepath, monitor=monitor, save_best_only=save_best_only, mode=mode)]
+    model.fit(X_train, y_train, batch_size=batch_size,
+              validation_data=(X_test, y_test), callbacks=cbks, nb_epoch=1)
+    assert os.path.exists(filepath)
+    os.remove(filepath)
+
+    # case 4
+    save_best_only = True
+    cbks = [SaveModelAndWeightsCheckpoint(
+        filepath, monitor=monitor, save_best_only=save_best_only, mode=mode)]
+    model.fit(X_train, y_train, batch_size=batch_size,
+              validation_data=(X_test, y_test), callbacks=cbks, nb_epoch=1)
+    assert os.path.exists(filepath)
+    os.remove(filepath)
+
+    # case 5 - hdf5 attrs
+    save_best_only = True
+    cbks = [SaveModelAndWeightsCheckpoint(
+        filepath, monitor=monitor, save_best_only=save_best_only, mode=mode,
+        hdf5_attrs={'test': 'Hello World!'}
+    )]
+    model.fit(X_train, y_train, batch_size=batch_size,
+              validation_data=(X_test, y_test), callbacks=cbks, nb_epoch=1)
+    assert os.path.exists(filepath)
+    f = h5py.File(filepath)
+    assert f.attrs['test'].decode('utf-8') == 'Hello World!'
+    f.close()
+    os.remove(filepath)
 
 
 def test_visualise_gan(tmpdir):
