@@ -1,7 +1,7 @@
 diktya
 ======
 
-|docs|
+|docs| |travis|
 
 diktya (Greek for networks) contains some complementary utilities for theano and keras .
 
@@ -34,3 +34,8 @@ limitations under the License.
     :alt: Documentation Status
     :scale: 100%
     :target: http://diktya.readthedocs.io/en/latest
+    
+.. |travis| image:: https://travis-ci.org/BioroboticsLab/diktya.svg?branch=master
+    :alt: Travis CI Status
+    :scale: 100%
+    :target: https://travis-ci.org/BioroboticsLab/diktya
