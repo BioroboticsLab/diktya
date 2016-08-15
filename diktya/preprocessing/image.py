@@ -27,7 +27,7 @@ class RandomWarpAugmentation:
     Perform random warping transformation on the input data.
 
     Parameters can be either constant values, a list/tuple containing the lower and upper bounds
-    for a uniform distribution of a value generating functions:
+    for a uniform distribution or a value generating function:
 
     Examples:
         * RandomWarpAugmentation(rotation=0.5 * np.pi)
