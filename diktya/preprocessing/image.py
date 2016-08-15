@@ -33,6 +33,16 @@ class RandomWarpAugmentation:
         * RandomWarpAugmentation(rotation=0.5 * np.pi)
         * RandomWarpAugmentation(rotation=(-0.25 * np.pi, 0.25 * np.pi))
         * RandomWarpAugmentation(rotation=lambda: np.random.normal(0, np.pi))
+        
+    Sensible starting values for parameter tuning:
+        * fliph_probability = 0.5
+        * flipv_probability = 0.5
+        * translation = (-5, 5)
+        * rotation = (-np.pi / 8, np.pi / 8)
+        * scale= (0.9, 1.1)
+        * shear = (-0.1 * np.pi, 0.1 * np.pi)
+        * diff_scale = 8
+        * diff_alpha = .75
 
     Args:
         fliph_probability: probability of random flips on horizontal (first) axis
@@ -49,15 +59,15 @@ class RandomWarpAugmentation:
         augment_y: whether to augment label data
     """
     def __init__(self,
-                 fliph_probability=0.5,
-                 flipv_probability=0.5,
-                 translation=(-5, 5),
-                 rotation=(-np.pi / 8, np.pi / 8),
-                 scale=(0.9, 1.1),
-                 shear=(-0.1 * np.pi, 0.1 * np.pi),
-                 use_diff=True,
-                 diff_scale=8,
-                 diff_alpha=.75,
+                 fliph_probability=0.,
+                 flipv_probability=0.,
+                 translation=(0, 0),
+                 rotation=(0, 0),
+                 scale=(1, 1),
+                 shear=(0, 0),
+                 use_diff=False,
+                 diff_scale=1,
+                 diff_alpha=1,
                  diff_fix_border=False,
                  augment_x=True,
                  augment_y=False):
