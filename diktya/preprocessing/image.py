@@ -33,7 +33,7 @@ class RandomWarpAugmentation:
         * RandomWarpAugmentation(rotation=0.5 * np.pi)
         * RandomWarpAugmentation(rotation=(-0.25 * np.pi, 0.25 * np.pi))
         * RandomWarpAugmentation(rotation=lambda: np.random.normal(0, np.pi))
-        
+
     Sensible starting values for parameter tuning:
         * fliph_probability = 0.5
         * flipv_probability = 0.5
