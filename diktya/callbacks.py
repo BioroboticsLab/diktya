@@ -381,13 +381,13 @@ class HistoryPerBatch(Callback):
             ax = fig.add_subplot(111)
         if metrics is None:
             metrics = self.metrics
-        if end is None:
-            end = len(next(iter(self.batch_history.values()))) + 1
 
         if skip_first_epoch:
             start = 1
         else:
             start = 0
+        if end is None:
+            end = len(next(iter(self.batch_history.values()))) + start
 
         has_batch_plot = defaultdict(lambda: False)
         for label, epochs in self.batch_history.items():

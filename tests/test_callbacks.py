@@ -293,7 +293,7 @@ def test_history_per_batch(tmpdir):
 def test_history_per_batch_plot(outdir):
     hist = HistoryPerBatch()
     hist.params = {}
-    hist.params['metrics'] = ['loss']
+    hist.params['metrics'] = ['loss', 'val_loss']
     hist.on_train_begin(0)
     path_cb = str(outdir.join("callback_plot.png"))
     plot_cb = hist.plot_callback(fname=path_cb)
@@ -305,7 +305,7 @@ def test_history_per_batch_plot(outdir):
         for b in range(100):
             hist.on_batch_begin(b)
             hist.on_batch_end(b, logs={'loss': float(np.random.normal(mean[e], std[e], 1))})
-        hist.on_epoch_end(e)
+        hist.on_epoch_end(e, logs={'val_loss': float(np.random.normal(mean[e], std[e], 1))})
 
     plot_cb.on_epoch_end(e)
     fig, axes = hist.plot()
