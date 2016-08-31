@@ -18,6 +18,7 @@ import copy
 from collections import OrderedDict
 import numpy as np
 import scipy.stats
+from diktya.func_api_helpers import get_hdf5_attr
 
 
 def to_radians(x):
@@ -386,6 +387,12 @@ class DistributionCollection(Distribution, Normalization):
             for name, (dist, nb_elems, norm) in self._dist_nb_elems_norm.items()
         ]
         return config
+
+    @classmethod
+    def from_hdf5(cls, fname):
+        dist_bytes = get_hdf5_attr(fname, 'distribution')
+        dist_config = json.loads(dist_bytes.decode('utf-8'))
+        return cls.from_config(dist_config)
 
 
 def examplary_tag_distribution(nb_bits=12):
