@@ -388,7 +388,11 @@ class HistoryPerBatch(Callback):
             start = 0
         if end is None:
             end = len(next(iter(self.batch_history.values()))) + start
+        for metric in metrics:
+            if not (metric in self.epoch_history or metric in self.batch_history):
+                raise Exception("No statistics to the given metric: {}".format(metric))
 
+        ax.set_xlim((start, end))
         has_batch_plot = defaultdict(lambda: False)
         for label, epochs in self.batch_history.items():
             if label not in metrics or len(epochs) <= start:
