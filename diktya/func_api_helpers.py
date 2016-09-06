@@ -198,7 +198,8 @@ def keras_copy(obj):
     Copies a keras object by using the ``get_config`` method.
     """
     config = obj.get_config()
-    del config['name']
+    if 'name' in config:
+        del config['name']
     return type(obj)(**config)
 
 
