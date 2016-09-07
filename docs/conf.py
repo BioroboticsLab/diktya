@@ -59,6 +59,7 @@ extensions = [
     'sphinx.ext.linkcode',
     'sphinx.ext.napoleon',
 ]
+napoleon_include_special_with_doc = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -320,6 +321,12 @@ intersphinx_mapping = {
 
 autodoc_member_order = 'bysource'
 add_module_names = False
+
+autodoc_default_flags = [
+    'members',
+    'undoc-members',
+    'show-inheritance'
+]
 
 
 def linkcode_resolve(domain, info):

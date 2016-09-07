@@ -21,7 +21,7 @@ def chain_augmentations(*augmentations, augment_x=True, augment_y=False):
         Xa, ya = aug((X, y))
 
     Args:
-        *augmentations (Augmentation): the leftest augmentations is applied first
+        augmentations (Augmentation): the leftest augmentations is applied first
         augment_x (bool): should augment data X
         augment_y (bool): should augment label y
 
@@ -130,7 +130,7 @@ class RandomWarpAugmentation(Augmentation):
         x_aug = trans(batch[0])
 
 
-Sensible starting values for parameter tuning:
+    Sensible starting values for parameter tuning:
         * fliph_probability = 0.5
         * flipv_probability = 0.5
         * translation = (-5, 5)
@@ -309,32 +309,35 @@ class WarpTransformation:
         return f
 
 
-class RandomNoiseAugmentation(Augmentation):
-    @staticmethod
-    def random_sigma(loc, scale):
+def random_std(loc, scale):
+    """
+    Draws a random std from a gaussian distribution with mean ``loc`` and std ``scale``.
+    """
+    def wrapper():
         return np.clip(np.random.normal(loc=loc, scale=scale), np.finfo(float).eps, np.inf)
+    return wrapper
 
-    def apply_noise(self, mat):
-        return np.clip(mat + np.random.normal(loc=0., scale=self.sigma(), size=mat.shape), -1, 1)
 
-    def __init__(self, sigma=lambda: RandomNoiseAugmentation.random_sigma(0.03, 0.01)):
-        self.sigma = sigma
+class RandomNoiseAugmentation(Augmentation):
+    """
+    Add gaussian noise with variable stds.
+
+    Args:
+        std (function): Returns variable std
+
+    """
+    def __init__(self, std=random_std(0.03, 0.01)):
+        self.std = std
 
     def get_transformation(self, shape):
-        return GaussNoiseTransformation(self.sigma(), shape)
-
-    def __call__(self, batch):
-        batch_noise = []
-        for x in batch:
-            batch_noise.append(self.apply_noise(x))
-        return np.stack(batch_noise)
+        return GaussNoiseTransformation(self.std(), shape)
 
 
 class GaussNoiseTransformation:
-    def __init__(self, sigma, shape):
-        self.sigma = sigma
+    def __init__(self, std, shape):
+        self.std = std
         self.shape = shape
-        self.noise = np.random.normal(loc=0., scale=self.sigma, size=self.shape)
+        self.noise = np.random.normal(loc=0., scale=self.std, size=self.shape)
 
     def __call__(self, arr):
         return np.clip(arr + self.noise, -1, 1)
