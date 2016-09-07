@@ -196,12 +196,12 @@ class RandomWarpAugmentation(Augmentation):
             scale = (scale, scale)
 
         return WarpTransformation(
-                bool(random.random() < self.flipv_probability()),
-                bool(random.random() < self.fliph_probability()),
-                self.translation(), self.rotation(),
-                scale, self.shear(), self.diff_scale(),
-                self.diff_alpha(), self.diff_fix_border(),
-                shape)
+            bool(random.random() < self.flipv_probability()),
+            bool(random.random() < self.fliph_probability()),
+            self.translation(), self.rotation(),
+            scale, self.shear(), self.diff_scale(),
+            self.diff_alpha(), self.diff_fix_border(),
+            shape)
 
 
 class WarpTransformation:
