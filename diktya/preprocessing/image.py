@@ -7,22 +7,99 @@ import numpy as np
 from skimage.transform import warp, resize, AffineTransform
 
 
-class ImageAugmentation:
-    def __init__(self, augmentations):
-        self.augmentations = augmentations
+def chain_augmentations(*augmentations, augment_x=True, augment_y=False):
+    """
+    Chain multiple augmentations.
+
+    Example:
+
+    .. code-block:: python
+
+        aug = chain_augmentations(RandomNoiseAugmentation(),
+                                  RandomWarpAugmentation())
+
+        Xa, ya = aug((X, y))
+
+    Args:
+        *augmentations (Augmentation): the leftest augmentations is applied first
+        augment_x (bool): should augment data X
+        augment_y (bool): should augment label y
+
+    Returns:
+        A function that takes a minibatch as input and applies the augmentations.
+        The minibatch can either be a numpy array or tuple of (X, y)
+        where X are the data and y the labels.
+
+    """
+    def wrapper(batch):
+        if type(batch) == tuple:
+            X, Y = batch
+            if len(X) != len(Y):
+                raise Exception("Got tuple but arrays have different size. "
+                                "Got X= {} and y={}".format(X.shape, Y.shape))
+        elif type(batch) == np.ndarray:
+            X = batch
+            Y = None
+        X_aug = []
+        Y_aug = []
+        for i in range(len(X)):
+            x = X[i]
+            if Y is not None:
+                y = Y[i]
+            else:
+                y = None
+            for aug in augmentations:
+                transformation = aug.get_transformation(X[i].shape)
+                if augment_x:
+                    x = transformation(x)
+                if augment_y:
+                    y = transformation(y)
+
+            X_aug.append(x)
+            if y is not None:
+                Y_aug.append(y)
+        X_aug = np.stack(X_aug)
+        if Y_aug is not None:
+            return X_aug, np.stack(Y_aug)
+        elif Y is not None:
+            return X_aug, Y
+        else:
+            return X_aug
+
+    return wrapper
+
+
+class Augmentation:
+    """
+    Augmentation super class. Subclasses must implement the ``get_transformation``
+    method.
+
+    """
+    def get_transformation(self, shape):
+        """
+        Returns a transformation. A transformation can be a function
+        or other callable object (``__call__``).  It must map image
+        to the augmented image. See :py:meth:`.RandomWarpAugmentation.transformation`
+        for an example.
+        """
+        raise NotImplementedError()
 
     def __call__(self, batch):
-        xb, yb = batch
-        assert (len(xb) == len(yb))
-        for idx in range(len(xb)):
-            x, y = xb[idx], yb[idx]
-            for aug in self.augmentations:
-                x, y = aug(x, y)
-            xb[idx], yb[idx] = x, y
-        return (xb, yb)
+        """
+        Applies random augmentations to each sample in the batch.
+        The first axis of the batch must be the samples.
+
+        Args:
+            batch (np.ndarray): 4-dim data minibatch
+        """
+        batch_transformed = []
+        for x in batch:
+            transformation = self.get_transformation(x.shape)
+            batch_transformed.append(transformation(x))
+        return np.stack(batch_transformed)
 
 
-class RandomWarpAugmentation:
+class RandomWarpAugmentation(Augmentation):
     """
     Perform random warping transformation on the input data.
 
@@ -34,7 +111,26 @@ class RandomWarpAugmentation:
         * RandomWarpAugmentation(rotation=(-0.25 * np.pi, 0.25 * np.pi))
         * RandomWarpAugmentation(rotation=lambda: np.random.normal(0, np.pi))
 
-    Sensible starting values for parameter tuning:
+    Example Usage:
+
+    .. code-block:: python
+
+        aug = RandomWarpAugmentation(rotation=(0.2 * np.pi))
+
+        # apply aug to each sample of the batch
+        batch_aug = aug(batch)
+
+        # get a transformation
+        trans = aug.get_transformation(batch.shape[1:])
+
+        # value of the rotation is available
+        rot = trans.rotation
+
+        # transform first sample in batch
+        x_aug = trans(batch[0])
+
+
+Sensible starting values for parameter tuning:
         * fliph_probability = 0.5
         * flipv_probability = 0.5
         * translation = (-5, 5)
@@ -51,9 +147,8 @@ class RandomWarpAugmentation:
         rotation: rotation angle in counter-clockwise direction as radians
         scale: scale as proportion of input size
         shear: shear angle in counter-clockwise direction as radians.
-        use_diff: whether to use diffeomorphism augmentation (also known as elastic distortion)
         diff_scale: scale parameter of diffeomorphism augmentation
-        diff_alpha: alpha parameter of diffeomorphism augmentation
+        diff_alpha: intensity of diffeomorphism augmentation
         diff_fix_border: fix_border parameter of diffeomorphism augmentation
         augment_x: whether to augment input data
         augment_y: whether to augment label data
@@ -65,27 +160,23 @@ class RandomWarpAugmentation:
                  rotation=(0, 0),
                  scale=(1, 1),
                  shear=(0, 0),
-                 use_diff=False,
                  diff_scale=1,
-                 diff_alpha=1,
+                 diff_alpha=0,
                  diff_fix_border=False,
                  augment_x=True,
                  augment_y=False):
-        self.fliph_probability = self.parse_parameter(fliph_probability)
-        self.flipv_probability = self.parse_parameter(flipv_probability)
-        self.translation = self.parse_parameter(translation)
-        self.rotation = self.parse_parameter(rotation)
-        self.scale = self.parse_parameter(scale)
-        self.shear = self.parse_parameter(shear)
-        self.use_diff = self.parse_parameter(use_diff)
-        self.diff_scale = self.parse_parameter(diff_scale)
-        self.diff_alpha = self.parse_parameter(diff_alpha)
-        self.diff_fix_border = self.parse_parameter(diff_fix_border)
-        self.augment_x = augment_x
-        self.augment_y = augment_y
+        self.fliph_probability = self._parse_parameter(fliph_probability)
+        self.flipv_probability = self._parse_parameter(flipv_probability)
+        self.translation = self._parse_parameter(translation)
+        self.rotation = self._parse_parameter(rotation)
+        self.scale = self._parse_parameter(scale)
+        self.shear = self._parse_parameter(shear)
+        self.diff_scale = self._parse_parameter(diff_scale)
+        self.diff_alpha = self._parse_parameter(diff_alpha)
+        self.diff_fix_border = self._parse_parameter(diff_fix_border)
 
     @staticmethod
-    def parse_parameter(param):
+    def _parse_parameter(param):
         if isinstance(param, Iterable):
             if len(param) != 2:
                 raise ValueError('lower and upper bound required')
@@ -98,6 +189,51 @@ class RandomWarpAugmentation:
         else:
             raise TypeError('parameters must either be bounds for a uniform distribution,' +
                             'a single value or a value generating function')
+
+    def get_transformation(self, shape):
+        scale = self.scale()
+        if type(self.scale()) in (float, int):
+            scale = (scale, scale)
+
+        return WarpTransformation(
+                bool(random.random() < self.flipv_probability()),
+                bool(random.random() < self.fliph_probability()),
+                self.translation(), self.rotation(),
+                scale, self.shear(), self.diff_scale(),
+                self.diff_alpha(), self.diff_fix_border(),
+                shape)
+
+
+class WarpTransformation:
+    """
+    Transformation produced by ::py::class:`.RandomWarpAugmentation`.
+    You can access the values of the transformation. E.g.
+    WarpTransformation.translation will hold the translations of this transformation.
+    """
+    def __init__(self, fliph, flipv, translation, rotation, scale, shear,
+                 diff_scale, diff_alpha, diff_fix_border, shape):
+        self.fliph = fliph
+        self.flipv = flipv
+        self.translation = translation
+        self.rotation = rotation
+        self.scale = scale
+        self.shear = shear
+        self.diff_scale = diff_scale
+        self.diff_alpha = diff_alpha
+        self.diff_fix_border = diff_fix_border
+        self.shape = shape[-2:]
+
+        self.affine_transformation = self._get_affine()
+        if self.diff_alpha != 0:
+            self.diffeomorphism = self._get_diffeomorphism(
+                self.shape, self.diff_scale, self.diff_alpha, self.diff_fix_border)
+        else:
+            self.diffeomorphism = None
+        self.warp = self._warp_factory(self.diffeomorphism, self.affine_transformation,
+                                       self.flipv, self.fliph)
+
+    def __call__(self, img, order=3):
+        return warp(img, self.warp, order=order)
 
     @staticmethod
     def _center_transform(transform, shape):
@@ -114,18 +250,18 @@ class RandomWarpAugmentation:
         frame[-line_width:, :] = 1
         return frame
 
-    def _get_random_affine(self, shape):
-        t = AffineTransform(scale=(self.scale(), self.scale()),
-                            rotation=self.rotation(),
-                            shear=self.shear(),
-                            translation=self.translation())
-        return self._center_transform(t, shape)
+    def _get_affine(self):
+        t = AffineTransform(scale=self.scale,
+                            rotation=self.rotation,
+                            shear=self.shear,
+                            translation=self.translation)
+        return self._center_transform(t, self.shape)
 
     @staticmethod
     def _get_diffeomorphism(shape, scale=30, alpha=1., fix_border=True,
                             random=np.random.uniform):
         """
-        Returns a diffeomorphism mapping that can be used wtih ``diff_warp``.
+        Returns a diffeomorphism mapping that can be used with ``_warp_factory``.
 
         Args:
             shape (tuple): Shape of the image
@@ -154,17 +290,14 @@ class RandomWarpAugmentation:
         diff_map = resize(diff_map, (h, w, 2), order=3)
         return diff_map
 
-    def get_random_diffeomorphism(self, shape):
-        return self._get_diffeomorphism(shape,
-                                        scale=self.diff_scale(),
-                                        alpha=self.diff_alpha(),
-                                        fix_border=self.diff_fix_border())
-
-    def diff_warp(self, diff_map, transform=None, flipv=False, fliph=False):
+    def _warp_factory(self, diff_map=None, transform=None, flipv=False, fliph=False):
         def f(xy):
             xi = xy[:, 0].astype(np.int)
             yi = xy[:, 1].astype(np.int)
-            off = xy + diff_map[yi, xi]
+            if diff_map is not None:
+                off = xy + diff_map[yi, xi]
+            else:
+                off = xy
             if transform is not None:
                 off = transform(off)
             if flipv:
@@ -175,26 +308,8 @@ class RandomWarpAugmentation:
 
         return f
 
-    def __call__(self, x, y):
-        if self.augment_x and self.augment_y:
-            assert (x.shape == y.shape)
 
-        transform = self._get_random_affine(x.shape)
-        diff = self.get_random_diffeomorphism(x.shape)
-        warp_f = self.diff_warp(diff, transform,
-                                bool(random.random() < self.flipv_probability()),
-                                bool(random.random() < self.fliph_probability()))
-
-        if self.augment_x:
-            x = warp(x, warp_f, order=3)
-
-        if self.augment_y:
-            y = warp(y, warp_f, order=3)
-
-        return x, y
-
-
-class RandomNoiseAugmentation:
+class RandomNoiseAugmentation(Augmentation):
     @staticmethod
     def random_sigma(loc, scale):
         return np.clip(np.random.normal(loc=loc, scale=scale), np.finfo(float).eps, np.inf)
@@ -202,17 +317,24 @@ class RandomNoiseAugmentation:
     def apply_noise(self, mat):
         return np.clip(mat + np.random.normal(loc=0., scale=self.sigma(), size=mat.shape), -1, 1)
 
-    def __init__(self,
-                 sigma=lambda: RandomNoiseAugmentation.random_sigma(0.03, 0.01),
-                 augment_x=True,
-                 augment_y=False):
+    def __init__(self, sigma=lambda: RandomNoiseAugmentation.random_sigma(0.03, 0.01)):
         self.sigma = sigma
-        self.augment_x = augment_x
-        self.augment_y = augment_y
 
-    def __call__(self, x, y):
-        if self.augment_x:
-            x = self.apply_noise(x)
-        if self.augment_y:
-            x = self.apply_noise(x)
-        return x, y
+    def get_transformation(self, shape):
+        return GaussNoiseTransformation(self.sigma(), shape)
+
+    def __call__(self, batch):
+        batch_noise = []
+        for x in batch:
+            batch_noise.append(self.apply_noise(x))
+        return np.stack(batch_noise)
+
+
+class GaussNoiseTransformation:
+    def __init__(self, sigma, shape):
+        self.sigma = sigma
+        self.shape = shape
+        self.noise = np.random.normal(loc=0., scale=self.sigma, size=self.shape)
+
+    def __call__(self, arr):
+        return np.clip(arr + self.noise, -1, 1)
