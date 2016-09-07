@@ -150,8 +150,7 @@ class RandomWarpAugmentation(Augmentation):
         diff_scale: scale parameter of diffeomorphism augmentation
         diff_alpha: intensity of diffeomorphism augmentation
         diff_fix_border: fix_border parameter of diffeomorphism augmentation
-        augment_x: whether to augment input data
-        augment_y: whether to augment label data
+        fill_mode (default 'edge'): one of corresponse to numpy.pad mode
     """
     def __init__(self,
                  fliph_probability=0.,
@@ -163,8 +162,8 @@ class RandomWarpAugmentation(Augmentation):
                  diff_scale=1,
                  diff_alpha=0,
                  diff_fix_border=False,
-                 augment_x=True,
-                 augment_y=False):
+                 fill_mode='edge',
+                 ):
         self.fliph_probability = self._parse_parameter(fliph_probability)
         self.flipv_probability = self._parse_parameter(flipv_probability)
         self.translation = self._parse_parameter(translation)
@@ -174,6 +173,7 @@ class RandomWarpAugmentation(Augmentation):
         self.diff_scale = self._parse_parameter(diff_scale)
         self.diff_alpha = self._parse_parameter(diff_alpha)
         self.diff_fix_border = self._parse_parameter(diff_fix_border)
+        self.fill_mode = fill_mode
 
     @staticmethod
     def _parse_parameter(param):
@@ -201,6 +201,7 @@ class RandomWarpAugmentation(Augmentation):
             self.translation(), self.rotation(),
             scale, self.shear(), self.diff_scale(),
             self.diff_alpha(), self.diff_fix_border(),
+            self.fill_mode,
             shape)
 
 
@@ -211,7 +212,7 @@ class WarpTransformation:
     WarpTransformation.translation will hold the translations of this transformation.
     """
     def __init__(self, fliph, flipv, translation, rotation, scale, shear,
-                 diff_scale, diff_alpha, diff_fix_border, shape):
+                 diff_scale, diff_alpha, diff_fix_border, fill_mode, shape):
         self.fliph = fliph
         self.flipv = flipv
         self.translation = translation
@@ -221,6 +222,7 @@ class WarpTransformation:
         self.diff_scale = diff_scale
         self.diff_alpha = diff_alpha
         self.diff_fix_border = diff_fix_border
+        self.fill_mode = fill_mode
         self.shape = shape[-2:]
 
         self.affine_transformation = self._get_affine()
@@ -233,7 +235,16 @@ class WarpTransformation:
                                        self.flipv, self.fliph)
 
     def __call__(self, img, order=3):
-        return warp(img, self.warp, order=order)
+        if img.ndim == 3:
+            img_warped = []
+            for channel in img:
+                img_warped.append(warp(channel, self.warp, order=order, mode=self.fill_mode))
+            return np.stack(img_warped)
+        elif img.ndim == 2:
+            return warp(img, self.warp, order=order, mode=self.fill_mode)
+        else:
+            raise Exception("Wrong number of dimensions. Expected 2 or 3. "
+                            "Got {} with shape {}.".format(img.ndim, img.shape))
 
     @staticmethod
     def _center_transform(transform, shape):
