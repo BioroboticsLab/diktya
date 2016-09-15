@@ -238,9 +238,14 @@ def load_model(fname, custom_objects={}):
     return model
 
 
-def get_hdf5_attr(fname, attr_name):
-    """Returns the toplevel attribute ``attr_name`` of the hdf5 file ``fname``."""
-    f = h5py.File(fname, 'r')
-    value = f.attrs[attr_name]
-    f.close()
-    return value
+def get_hdf5_attr(fname, attr_name, default=None):
+    """
+    Returns the toplevel attribute ``attr_name`` of the hdf5 file ``fname``.
+    If ``default`` is not None and the attribute is not present, then
+    ``default`` is returned.
+    """
+    with h5py.File(fname, 'r') as f:
+        if attr_name not in f.attrs and default is not None:
+            return default
+        else:
+            return f.attrs[attr_name]

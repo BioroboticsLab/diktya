@@ -13,7 +13,9 @@
 # limitations under the License.
 
 import numpy as np
-from diktya.func_api_helpers import sequential, concat, save_model, load_model
+from diktya.func_api_helpers import sequential, concat, save_model, load_model, \
+    get_hdf5_attr
+
 import h5py
 
 from keras.layers.core import Dense
@@ -134,3 +136,12 @@ def test_save_model(tmpdir):
     for l, l_load in zip(m.layers, m_load.layers):
         for w, w_load in zip(l.trainable_weights, l_load.trainable_weights):
             assert (K.get_value(w) == K.get_value(w_load)).all()
+
+
+def test_get_hdf5_attr(tmpdir):
+    fname = str(tmpdir.join("test.hdf5"))
+    with h5py.File(fname) as f:
+        f.attrs['name'] = "Ada Lovelance"
+
+    assert get_hdf5_attr(fname, 'name') == "Ada Lovelance"
+    assert get_hdf5_attr(fname, 'not_present', default="default") == "default"
