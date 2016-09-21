@@ -5,6 +5,7 @@ import random
 
 import numpy as np
 from skimage.transform import warp, resize, AffineTransform
+from skimage.exposure import equalize_hist
 
 
 def chain_augmentations(*augmentations, augment_x=True, augment_y=False):
@@ -148,6 +149,15 @@ class CropTransformation:
             return data[:, hb:he, wb:we]
         else:
             return data
+
+
+class HistEqualization:
+    """
+    Performs historgram equalization. See ``skimage.expose.equalize_hist``.
+    The returned data is scaled to ``[-1, 1]``.
+    """
+    def __call__(self, data):
+        return 2*equalize_hist(data) - 1
 
 
 class ChannelScaleShiftAugmentation(Augmentation):
