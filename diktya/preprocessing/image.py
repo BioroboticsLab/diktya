@@ -15,8 +15,8 @@ def chain_augmentations(*augmentations, augment_x=True, augment_y=False):
 
     .. code-block:: python
 
-        aug = chain_augmentations(RandomNoiseAugmentation(),
-                                  RandomWarpAugmentation())
+        aug = chain_augmentations(NoiseAugmentation(),
+                                  WarpAugmentation())
 
         Xa, ya = aug((X, y))
 
@@ -79,7 +79,7 @@ class Augmentation:
         """
         Returns a transformation. A transformation can be a function
         or other callable object (``__call__``).  It must map image
-        to the augmented image. See :py:meth:`.RandomWarpAugmentation.transformation`
+        to the augmented image. See :py:meth:`.WarpAugmentation.transformation`
         for an example.
         """
         raise NotImplementedError()
@@ -146,7 +146,7 @@ class ChannelScaleShiftTransformation():
              for i, channel in enumerate(x)])
 
 
-class RandomWarpAugmentation(Augmentation):
+class WarpAugmentation(Augmentation):
     """
     Perform random warping transformation on the input data.
 
@@ -154,15 +154,15 @@ class RandomWarpAugmentation(Augmentation):
     for a uniform distribution or a value generating function:
 
     Examples:
-        * RandomWarpAugmentation(rotation=0.5 * np.pi)
-        * RandomWarpAugmentation(rotation=(-0.25 * np.pi, 0.25 * np.pi))
-        * RandomWarpAugmentation(rotation=lambda: np.random.normal(0, np.pi))
+        * WarpAugmentation(rotation=0.5 * np.pi)
+        * WarpAugmentation(rotation=(-0.25 * np.pi, 0.25 * np.pi))
+        * WarpAugmentation(rotation=lambda: np.random.normal(0, np.pi))
 
     Example Usage:
 
     .. code-block:: python
 
-        aug = RandomWarpAugmentation(rotation=(0.2 * np.pi))
+        aug = WarpAugmentation(rotation=(0.2 * np.pi))
 
         # apply aug to each sample of the batch
         batch_aug = aug(batch)
@@ -239,7 +239,7 @@ class RandomWarpAugmentation(Augmentation):
 
 class WarpTransformation:
     """
-    Transformation produced by ::py::class:`.RandomWarpAugmentation`.
+    Transformation produced by ::py::class:`.WarpAugmentation`.
     You can access the values of the transformation. E.g.
     WarpTransformation.translation will hold the translations of this transformation.
     """
@@ -326,7 +326,7 @@ class WarpTransformation:
         intensity = 0.25 * alpha * 1 / rel_scale
         diff_map = np.clip(random(-intensity, intensity, (dh, dw, 2)), -intensity, intensity)
         if fix_border:
-            frame = RandomWarpAugmentation._get_frame((dh, dw), 1)
+            frame = WarpAugmentation._get_frame((dh, dw), 1)
             for i in (0, 1):
                 diff_map[:, :, i] = diff_map[:, :, i] * (1 - frame)
 
@@ -361,7 +361,7 @@ def random_std(loc, scale):
     return wrapper
 
 
-class RandomNoiseAugmentation(Augmentation):
+class NoiseAugmentation(Augmentation):
     """
     Add gaussian noise with variable stds.
 
