@@ -114,6 +114,42 @@ def _parse_parameter(param):
                         'a single value or a value generating function')
 
 
+class CropAugmentation(Augmentation):
+    def __init__(self, translation, crop_shape):
+        self.translation = _parse_parameter(translation)
+        self.crop_shape = crop_shape
+
+    def get_transformation(self, shape):
+        if len(shape) != 3:
+            raise Exception("Shape must be 3-dimensional. Got {}.".format(shape))
+        return CropTransformation([self.translation(), self.translation()],
+                                  self.crop_shape)
+
+
+class CropTransformation:
+    def __init__(self, translation, crop_shape):
+        self.translation = translation
+        self.crop_shape = crop_shape
+
+    def __call__(self, data):
+        if len(data.shape) != 3:
+            raise Exception("Shape must be 3-dimensional. Got {}."
+                            .format(data.shape))
+        crop_shp = self.crop_shape
+        if data.shape[-2:] != crop_shp:
+            h, w = data.shape[-2:]
+            assert h >= crop_shp[0] and w >= crop_shp[1]
+            hc = h // 2 + self.translation[0]
+            wc = w // 2 + self.translation[1]
+            hb = max(hc - crop_shp[0] // 2, 0)
+            he = hb + crop_shp[0]
+            wb = max(wc - crop_shp[1] // 2, 0)
+            we = wb + crop_shp[1]
+            return data[:, hb:he, wb:we]
+        else:
+            return data
+
+
 class ChannelScaleShiftAugmentation(Augmentation):
     def __init__(self, scale, shift, min=-1, max=1):
         """

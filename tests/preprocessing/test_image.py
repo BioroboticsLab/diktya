@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from diktya.preprocessing.image import chain_augmentations, WarpAugmentation, \
-    NoiseAugmentation, random_std, ChannelScaleShiftAugmentation
+    NoiseAugmentation, random_std, ChannelScaleShiftAugmentation, CropAugmentation
 
 
 @pytest.fixture
@@ -33,6 +33,22 @@ def data_gen2d(batchsize, shape2d):
 @pytest.fixture
 def data_gen3d(batchsize, shape3d):
     return lambda: np.random.rand(batchsize, *shape3d)
+
+
+def test_crop_augmentation(data_gen3d):
+    x = data_gen3d()
+    crop_shape = (16, 16)
+    crop_aug = CropAugmentation(5, crop_shape)
+
+    trans = crop_aug.get_transformation(x.shape[1:])
+    assert trans.translation == [5, 5]
+    start = x.shape[-1] // 2 - crop_shape[0] // 2 + 5
+    end = start + crop_shape[0]
+
+    assert (trans(x[0]) == x[0, :, start:end, start:end]).all()
+
+    x_crop = crop_aug(x)
+    assert x_crop.shape[-2:] == crop_shape
 
 
 def test_channel_scale_shift(data_gen3d):
