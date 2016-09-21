@@ -99,6 +99,53 @@ class Augmentation:
         return np.stack(batch_transformed)
 
 
+def _parse_parameter(param):
+    if isinstance(param, Iterable):
+        if len(param) != 2:
+            raise ValueError('lower and upper bound required')
+        lower, upper = param
+        return lambda: np.random.uniform(lower, upper)
+    elif isinstance(param, Number):
+        return lambda: param
+    elif isinstance(param, FunctionType):
+        return param
+    else:
+        raise TypeError('parameters must either be bounds for a uniform distribution,' +
+                        'a single value or a value generating function')
+
+
+class ChannelScaleShiftAugmentation(Augmentation):
+    def __init__(self, scale, shift, min=-1, max=1):
+        """
+        Augments a image by scaling and shifts its channels.
+        """
+        self.scale = _parse_parameter(scale)
+        self.shift = _parse_parameter(shift)
+        self.min = min
+        self.max = max
+
+    def get_transformation(self, shape):
+        if len(shape) != 3:
+            raise Exception("Shape must be 3-dimensional. Got {}.".format(shape))
+        nb_channels = shape[0]
+        shift = [self.shift() for _ in range(nb_channels)]
+        scale = [self.scale() for _ in range(nb_channels)]
+        return ChannelScaleShiftTransformation(scale, shift, self.min, self.max)
+
+
+class ChannelScaleShiftTransformation():
+    def __init__(self, scale, shift, min=-1, max=1):
+        self.scale = scale
+        self.shift = shift
+        self.min = min
+        self.max = max
+
+    def __call__(self, x):
+        return np.stack(
+            [np.clip(self.scale[i]*channel + self.shift[i], self.min, self.max)
+             for i, channel in enumerate(x)])
+
+
 class RandomWarpAugmentation(Augmentation):
     """
     Perform random warping transformation on the input data.
@@ -164,31 +211,16 @@ class RandomWarpAugmentation(Augmentation):
                  diff_fix_border=False,
                  fill_mode='edge',
                  ):
-        self.fliph_probability = self._parse_parameter(fliph_probability)
-        self.flipv_probability = self._parse_parameter(flipv_probability)
-        self.translation = self._parse_parameter(translation)
-        self.rotation = self._parse_parameter(rotation)
-        self.scale = self._parse_parameter(scale)
-        self.shear = self._parse_parameter(shear)
-        self.diff_scale = self._parse_parameter(diff_scale)
-        self.diff_alpha = self._parse_parameter(diff_alpha)
-        self.diff_fix_border = self._parse_parameter(diff_fix_border)
+        self.fliph_probability = _parse_parameter(fliph_probability)
+        self.flipv_probability = _parse_parameter(flipv_probability)
+        self.translation = _parse_parameter(translation)
+        self.rotation = _parse_parameter(rotation)
+        self.scale = _parse_parameter(scale)
+        self.shear = _parse_parameter(shear)
+        self.diff_scale = _parse_parameter(diff_scale)
+        self.diff_alpha = _parse_parameter(diff_alpha)
+        self.diff_fix_border = _parse_parameter(diff_fix_border)
         self.fill_mode = fill_mode
-
-    @staticmethod
-    def _parse_parameter(param):
-        if isinstance(param, Iterable):
-            if len(param) != 2:
-                raise ValueError('lower and upper bound required')
-            lower, upper = param
-            return lambda: np.random.uniform(lower, upper)
-        elif isinstance(param, Number):
-            return lambda: param
-        elif isinstance(param, FunctionType):
-            return param
-        else:
-            raise TypeError('parameters must either be bounds for a uniform distribution,' +
-                            'a single value or a value generating function')
 
     def get_transformation(self, shape):
         scale = self.scale()
