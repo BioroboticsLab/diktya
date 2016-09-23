@@ -127,6 +127,8 @@ class CropAugmentation(Augmentation):
 
 class CropTransformation:
     def __init__(self, translation, crop_shape):
+        if type(translation) == int:
+            translation = (translation, translation)
         self.translation = translation
         self.crop_shape = crop_shape
 
