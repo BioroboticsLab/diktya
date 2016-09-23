@@ -11,6 +11,7 @@ Welcome to diktya's documentation!
     api/func_api_helpers
     api/blocks
     api/distributions
+    api/random_search
     api/layers/core
     api/preprocessing/image
     api/plot/latexify
