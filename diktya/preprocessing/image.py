@@ -121,8 +121,6 @@ class CropAugmentation(Augmentation):
         self.crop_shape = crop_shape
 
     def get_transformation(self, shape):
-        if len(shape) != 3:
-            raise Exception("Shape must be 3-dimensional. Got {}.".format(shape))
         return CropTransformation([self.translation(), self.translation()],
                                   self.crop_shape)
 
@@ -133,8 +131,8 @@ class CropTransformation:
         self.crop_shape = crop_shape
 
     def __call__(self, data):
-        if len(data.shape) != 3:
-            raise Exception("Shape must be 3-dimensional. Got {}."
+        if len(data.shape) <= 1:
+            raise Exception("Shape must be at least 2-dimensional. Got {}."
                             .format(data.shape))
         crop_shp = self.crop_shape
         if data.shape[-2:] != crop_shp:
@@ -146,7 +144,7 @@ class CropTransformation:
             he = hb + crop_shp[0]
             wb = max(wc - crop_shp[1] // 2, 0)
             we = wb + crop_shp[1]
-            return data[:, hb:he, wb:we]
+            return data[..., hb:he, wb:we]
         else:
             return data
 
