@@ -12,7 +12,8 @@ setup(name='diktya',
           "scikit-image>=0.11.3",
           "dotmap>=1.1.2",
           "pandas>=0.18"
-          "h5py"
+          "h5py",
+          "tqdm",
       ],
       packages=[
           'diktya',

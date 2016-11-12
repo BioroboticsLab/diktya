@@ -67,15 +67,15 @@ def shuffle_hdf5(h5, output_fname, batch_size=100, print_progress=False):
     nb_samples = int(h5.attrs['__append_pos'])
     batch_size = min(batch_size, nb_samples)
     if print_progress:
-        import progressbar
-        bar = progressbar.ProgressBar(max_value=int(nb_samples))
+        from tqdm import tqdm
+        bar = tqdm(total=int(nb_samples))
 
     for i, batch in enumerate(iterate_hdf5(h5, batch_size, shuffle=True, nb_iterations=1)):
         print(i)
         print(next(iter(batch.values())).shape)
         append_to_hdf5(h5_shuffled, batch)
         if print_progress:
-            bar.update((i+1)*batch_size)
+            bar.update(batch_size)
     h5_shuffled.close()
 
 
