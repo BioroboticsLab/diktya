@@ -36,8 +36,7 @@ def plot_rolling_percentile(start_end, values, label=None,
     upper = upper.rolling(**rolling_args).mean()
     lower = pd.Series(rolling.apply(np.percentile, args=[percentile[0]]))
     lower = lower.rolling(**rolling_args).mean()
-    nb_epochs = end - start
-    epoch_labels = np.arange(start, end, nb_epochs / len(means))
+    epoch_labels = np.linspace(start, end, len(means))
     base_line, = ax.plot(epoch_labels, means, label=label, color=color)
     ax.fill_between(epoch_labels, lower, upper,
                     facecolor=base_line.get_color(), alpha=percentile_alpha)
