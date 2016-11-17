@@ -22,7 +22,9 @@ def chain_augmentations(*augmentations, augment_x=True, augment_y=False):
         Xa, ya = aug((X, y))
 
     Args:
-        augmentations (Augmentation): the leftest augmentations is applied first
+        augmentations (Augmentation or functions):
+            Can be a Augmentation object or any callable object. The leftest
+            augmentations is applied first.
         augment_x (bool): should augment data X
         augment_y (bool): should augment label y
 
@@ -32,17 +34,27 @@ def chain_augmentations(*augmentations, augment_x=True, augment_y=False):
         where X are the data and y the labels.
 
     """
+    def get_transformation(aug, shape):
+        if issubclass(type(aug), Augmentation):
+            return aug.get_transformation(shape)
+        elif hasattr(aug, '__call__'):
+            return aug
+        else:
+            raise Exception("Must be a subclass of Augmentation or callabe. "
+                            "But got {}".format(aug))
+
     def wrapper(batch):
         if type(batch) == tuple:
             X, Y = batch
             if len(X) != len(Y):
                 raise Exception("Got tuple but arrays have different size. "
                                 "Got X= {} and y={}".format(X.shape, Y.shape))
+            Y_aug = []
         elif type(batch) == np.ndarray:
             X = batch
             Y = None
+            Y_aug = None
         X_aug = []
-        Y_aug = []
         for i in range(len(X)):
             x = X[i]
             if Y is not None:
@@ -50,10 +62,10 @@ def chain_augmentations(*augmentations, augment_x=True, augment_y=False):
             else:
                 y = None
             for aug in augmentations:
-                transformation = aug.get_transformation(X[i].shape)
+                transformation = get_transformation(aug, X[i].shape)
                 if augment_x:
                     x = transformation(x)
-                if augment_y:
+                if augment_y and y is not None:
                     y = transformation(y)
 
             X_aug.append(x)
@@ -230,8 +242,7 @@ class WarpAugmentation(Augmentation):
         * rotation = (-np.pi / 8, np.pi / 8)
         * scale= (0.9, 1.1)
         * shear = (-0.1 * np.pi, 0.1 * np.pi)
-        * diff_scale = 8
-        * diff_alpha = .75
+        * diffeomorphism = [(8, .75)]
 
     Args:
         fliph_probability: probability of random flips on horizontal (first) axis
@@ -240,10 +251,11 @@ class WarpAugmentation(Augmentation):
         rotation: rotation angle in counter-clockwise direction as radians
         scale: scale as proportion of input size
         shear: shear angle in counter-clockwise direction as radians.
-        diff_scale: scale parameter of diffeomorphism augmentation
-        diff_alpha: intensity of diffeomorphism augmentation
+        diffeomorphism: list of diffeomorphism parameters. Elements must
+            be of ``(scale, intensity)``.
         diff_fix_border: fix_border parameter of diffeomorphism augmentation
         fill_mode (default 'edge'): one of corresponse to numpy.pad mode
+
     """
     def __init__(self,
                  fliph_probability=0.,
@@ -252,8 +264,7 @@ class WarpAugmentation(Augmentation):
                  rotation=(0, 0),
                  scale=(1, 1),
                  shear=(0, 0),
-                 diff_scale=1,
-                 diff_alpha=0,
+                 diffeomorphism=[],
                  diff_fix_border=False,
                  fill_mode='edge',
                  ):
@@ -263,8 +274,8 @@ class WarpAugmentation(Augmentation):
         self.rotation = _parse_parameter(rotation)
         self.scale = _parse_parameter(scale)
         self.shear = _parse_parameter(shear)
-        self.diff_scale = _parse_parameter(diff_scale)
-        self.diff_alpha = _parse_parameter(diff_alpha)
+        self.diffeomorphism = [(_parse_parameter(s), _parse_parameter(i))
+                                for s, i in diffeomorphism]
         self.diff_fix_border = _parse_parameter(diff_fix_border)
         self.fill_mode = fill_mode
 
@@ -273,12 +284,14 @@ class WarpAugmentation(Augmentation):
         if type(self.scale()) in (float, int):
             scale = (scale, scale)
 
+        diffeomorphism = [(diff_scale(), diff_intensity())
+                          for diff_scale, diff_intensity in self.diffeomorphism]
         return WarpTransformation(
             bool(random.random() < self.flipv_probability()),
             bool(random.random() < self.fliph_probability()),
             self.translation(), self.rotation(),
-            scale, self.shear(), self.diff_scale(),
-            self.diff_alpha(), self.diff_fix_border(),
+            scale, self.shear(),
+            diffeomorphism, self.diff_fix_border(),
             self.fill_mode,
             shape)
 
@@ -290,26 +303,28 @@ class WarpTransformation:
     WarpTransformation.translation will hold the translations of this transformation.
     """
     def __init__(self, fliph, flipv, translation, rotation, scale, shear,
-                 diff_scale, diff_alpha, diff_fix_border, fill_mode, shape):
+                 diffeomorphism, diff_fix_border, fill_mode, shape):
         self.fliph = fliph
         self.flipv = flipv
         self.translation = translation
         self.rotation = rotation
         self.scale = scale
         self.shear = shear
-        self.diff_scale = diff_scale
-        self.diff_alpha = diff_alpha
+        self.diffeomorphism = diffeomorphism
         self.diff_fix_border = diff_fix_border
         self.fill_mode = fill_mode
         self.shape = shape[-2:]
 
         self.affine_transformation = self._get_affine()
-        if self.diff_alpha != 0:
-            self.diffeomorphism = self._get_diffeomorphism(
-                self.shape, self.diff_scale, self.diff_alpha, self.diff_fix_border)
+        if self.diffeomorphism:
+            self.diffeomorphism_map = sum([
+                self._get_diffeomorphism_map(
+                    self.shape, diff_scale, diff_intensity, self.diff_fix_border)
+                for diff_scale, diff_intensity in self.diffeomorphism])
+
         else:
-            self.diffeomorphism = None
-        self.warp = self._warp_factory(self.diffeomorphism, self.affine_transformation,
+            self.diffeomorphism_map = None
+        self.warp = self._warp_factory(self.diffeomorphism_map, self.affine_transformation,
                                        self.flipv, self.fliph)
 
     def __call__(self, img, order=3):
@@ -347,7 +362,7 @@ class WarpTransformation:
         return self._center_transform(t, self.shape)
 
     @staticmethod
-    def _get_diffeomorphism(shape, scale=30, alpha=1., fix_border=True,
+    def _get_diffeomorphism_map(shape, scale=30, intensity=1., fix_border=True,
                             random=np.random.uniform):
         """
         Returns a diffeomorphism mapping that can be used with ``_warp_factory``.
@@ -355,7 +370,7 @@ class WarpTransformation:
         Args:
             shape (tuple): Shape of the image
             scale: Scale of the diffeomorphism in pixels.
-            alpha (float): Intensity of the diffeomorphism. Must be between 0 and 1
+            intensity (float): Intensity of the diffeomorphism. Must be between 0 and 1
             fix_border (boolean): If true the border of the resulting image stay constant.
             random: Function to draw the randomness.  Will be called with
                     ``random(-intensity, intensity, shape)``.
@@ -369,10 +384,10 @@ class WarpTransformation:
             dh = int(scale / w * h)
 
         rel_scale = scale / min(h, w)
-        intensity = 0.25 * alpha * 1 / rel_scale
+        intensity = 0.25 * intensity * 1 / rel_scale
         diff_map = np.clip(random(-intensity, intensity, (dh, dw, 2)), -intensity, intensity)
         if fix_border:
-            frame = WarpAugmentation._get_frame((dh, dw), 1)
+            frame = WarpTransformation._get_frame((dh, dw), 1)
             for i in (0, 1):
                 diff_map[:, :, i] = diff_map[:, :, i] * (1 - frame)
 
