@@ -41,7 +41,7 @@ def get_activation(activation):
 
 
 def conv2d_block(n, filters=3, depth=1, border='same', activation='relu',
-                 batchnorm=True, pooling=None, up=False):
+                 batchnorm=True, pooling=None, up=False, subsample=1):
     """
     2D-Convolutional block consisting of possible muliple repetitions of ``Convolution2D``,
     ``BatchNormalization``, and ``Activation`` layers and can be finished by
@@ -93,16 +93,24 @@ def conv2d_block(n, filters=3, depth=1, border='same', activation='relu',
         if up:
             return UpSampling2D()
 
-    if pooling is not None:
-        assert not up, "Cannot use both upsampling and pooling."
+    def get_conv2d(d):
+        if d == 0:
+            return Convolution2D(n, filters, filters, border_mode=border,
+                                 subsample=(subsample, subsample))
+        else:
+            return Convolution2D(n, filters, filters, border_mode=border)
+
+    if sum([pooling is not None, up, subsample != 1]) > 1:
+        raise Exception("You want to use pooling: {}, up: {}, and {}."
+                        "But you can only use one at a time.".format(pooling, up, subsample != 1))
 
     return [
         [
-            Convolution2D(n, filters, filters, border_mode=border),
+            get_conv2d(d),
             get_batchnorm(),
             get_activation(activation),
         ]
-        for _ in range(depth)
+        for d in range(depth)
     ] + [get_pooling(), get_upsampling()]
 
 
