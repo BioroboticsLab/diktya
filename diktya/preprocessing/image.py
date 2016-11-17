@@ -275,7 +275,7 @@ class WarpAugmentation(Augmentation):
         self.scale = _parse_parameter(scale)
         self.shear = _parse_parameter(shear)
         self.diffeomorphism = [(_parse_parameter(s), _parse_parameter(i))
-                                for s, i in diffeomorphism]
+                               for s, i in diffeomorphism]
         self.diff_fix_border = _parse_parameter(diff_fix_border)
         self.fill_mode = fill_mode
 
@@ -363,7 +363,7 @@ class WarpTransformation:
 
     @staticmethod
     def _get_diffeomorphism_map(shape, scale=30, intensity=1., fix_border=True,
-                            random=np.random.uniform):
+                                random=np.random.uniform):
         """
         Returns a diffeomorphism mapping that can be used with ``_warp_factory``.
 
