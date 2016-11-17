@@ -84,13 +84,14 @@ def image_save(fname, img_array, low=-1, high=1):
 
     The image range must be between ``low`` and ``high``.
     """
-    if img_array.min() < low:
-        raise Exception("Got an image with min {}, but low is set to {}."
-                        .format(img_array.min(), low))
+    if img_array.dtype != np.uint8:
+        if img_array.min() < low:
+            raise Exception("Got an image with min {}, but low is set to {}."
+                            .format(img_array.min(), low))
 
-    if img_array.max() > high:
-        raise Exception("Got an image with max {}, but high is set to {}."
-                        .format(img_array.min(), low))
+        if img_array.max() > high:
+            raise Exception("Got an image with max {}, but high is set to {}."
+                            .format(img_array.min(), low))
 
     ndim = len(img_array.shape)
     nb_channels = len(img_array)
