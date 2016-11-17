@@ -161,7 +161,7 @@ class InBounds(Layer):
 
     """
 
-    def __init__(self, low=-1, high=1, clip=False, weight=1, **kwargs):
+    def __init__(self, low=-1, high=1, clip=True, weight=15, **kwargs):
         self.low = low
         self.high = high
         self.clip = clip
