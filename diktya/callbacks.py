@@ -175,6 +175,13 @@ class SaveModels(Callback):
                 save_model(model, fname, overwrite=self.overwrite, attrs=self.hdf5_attrs)
 
 
+class DotProgressBar(OnEpochEnd):
+    def __init__(self):
+        super().__init__(
+            lambda e, l: print('.', end='', flush=True),
+            every_nth_epoch=1)
+
+
 class LearningRateScheduler(Callback):
     """
     Learning rate scheduler
