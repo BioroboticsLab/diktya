@@ -19,12 +19,14 @@ import numpy as np
 
 def create_hdf5_for(fname, data, chunks=256):
     h5 = h5py.File(fname, 'w')
-    h5.attrs['__append_pos'] = 0
-    _create_datasets_for(h5, data, chunks)
+    create_datasets_for(h5, data, chunks)
     return h5
 
 
-def _create_datasets_for(h5, data, chunks=256):
+def create_datasets_for(h5, data, chunks=256):
+    if '__append_pos' in h5.attrs:
+        raise Exception("Already has datasets")
+    h5.attrs['__append_pos'] = 0
     for name, array in data.items():
         shape = array.shape[1:]
         h5.create_dataset(
@@ -33,6 +35,11 @@ def _create_datasets_for(h5, data, chunks=256):
             chunks=(chunks,) + shape,
             maxshape=(None,) + shape,
             dtype=str(array.dtype))
+
+
+def maybe_create_datasets_for(h5, data, chunks=256):
+    if all(name not in h5 for name in data.keys()):
+        create_datasets_for(h5, data, chunks)
 
 
 def append_to_hdf5(h5, data):
@@ -49,7 +56,7 @@ def append_to_hdf5(h5, data):
             ensure_enough_space_for(end)
             if len(array) != size:
                 raise Exception("Arrays must have the same number of samples."
-                                " Got {} and {}".format(size, len(array)))
+                                " Got {} and {} for {}".format(size, len(array), name))
             h5[name][begin:end] = array[:size]
     h5.attrs['__append_pos'] += size
     return int(h5.attrs['__append_pos'])
@@ -71,8 +78,6 @@ def shuffle_hdf5(h5, output_fname, batch_size=100, print_progress=False):
         bar = tqdm(total=int(nb_samples))
 
     for i, batch in enumerate(iterate_hdf5(h5, batch_size, shuffle=True, nb_iterations=1)):
-        print(i)
-        print(next(iter(batch.values())).shape)
         append_to_hdf5(h5_shuffled, batch)
         if print_progress:
             bar.update(batch_size)
