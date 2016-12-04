@@ -24,7 +24,7 @@ def scipy_gaussian_filter_2d(x, sigma=2/3.):
     return gaussian_filter1d(gaussian_filter1d(x, sigma, axis=-1), sigma, axis=-2)
 
 
-def tile(tiles, columns_must_be_multiple_of=1):
+def tile(tiles, columns_must_be_multiple_of=1, border=0):
     def calc_columns_rows(n):
         num_columns = int(ceil(sqrt(n)))
         if num_columns % columns_must_be_multiple_of != 0:
@@ -38,9 +38,13 @@ def tile(tiles, columns_must_be_multiple_of=1):
 
     if len(tile_size) == 2:
         tile_height, tile_width = tile_size
+        tile_height += border
+        tile_width += border
         combined_size = (1, tile_height * rows, tile_width * cols)
     elif len(tile_size) == 3:
         tile_height, tile_width = tile_size[1:]
+        tile_height += border
+        tile_width += border
         combined_size = (tile_size[0], tile_height * rows, tile_width * cols)
     else:
         raise ValueError("Only 2 or 3 dim input size are supported, got: {}"
@@ -52,7 +56,7 @@ def tile(tiles, columns_must_be_multiple_of=1):
             if tile_idx < len(tiles):
                 ir = r*tile_height
                 ic = c*tile_width
-                im[:, ir:ir+tile_height, ic:ic+tile_width] = tiles[tile_idx]
+                im[:, ir:ir+tile_height-border, ic:ic+tile_width-border] = tiles[tile_idx]
     return im
 
 
