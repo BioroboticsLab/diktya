@@ -131,3 +131,25 @@ def iterate_hdf5(h5, batch_size, shuffle=False,
         yield {name: np.concatenate(arrs) for name, arrs in batch.items()}
         if stop_iteration:
             break
+
+
+def print_datasets(h5, batch_size=100):
+    batch = next(iterate_hdf5(h5, batch_size))
+    print("{:14}| {:20} | dtype".format("name", "shape"))
+    print("-" * 50)
+    for name, arr in batch.items():
+        shape = arr.shape
+        if shape[0] == batch_size:
+            shape_str = "(bs, {})".format(", ".join([str(s) for s in shape[1:]]))
+        else:
+            shape_str = str(shape)
+        print("{:14}| {:20} |".format(name, shape_str), arr.dtype)
+
+
+def print_attrs(h5):
+    print("{:14}| {:20} | dtype".format("name", "shape"))
+    print("-" * 50)
+    for name, arr in h5.attrs.items():
+        shape = arr.shape
+        shape_str = str(shape)
+        print("{:14}| {:20} |".format(name, shape_str), arr.dtype)
