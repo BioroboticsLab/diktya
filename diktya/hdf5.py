@@ -63,6 +63,9 @@ def append_to_hdf5(h5, data):
 
 
 def shuffle_hdf5(h5, output_fname, batch_size=100, print_progress=False):
+    """
+    Saves a shuffled verison of ``h5`` to output_fname.
+    """
     h5_shuffled = create_hdf5_for(
         output_fname, next(iterate_hdf5(h5, 1)))
 
