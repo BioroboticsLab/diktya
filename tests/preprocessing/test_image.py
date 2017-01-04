@@ -2,7 +2,8 @@ import numpy as np
 import pytest
 
 from diktya.preprocessing.image import chain_augmentations, WarpAugmentation, \
-    NoiseAugmentation, random_std, ChannelScaleShiftAugmentation, CropAugmentation
+    NoiseAugmentation, random_std, ChannelScaleShiftAugmentation, CropAugmentation, \
+    LambdaAugmentation
 
 
 @pytest.fixture
@@ -133,3 +134,12 @@ def test_label_augmentation(data_gen2d):
     assert(Xa.shape == X.shape)
     assert(ya.shape == y.shape)
     assert (Xa == ya).all()
+
+
+def test_lambda_augmentation(data_gen2d):
+    X = data_gen2d()
+    aug = LambdaAugmentation(lambda a: np.zeros_like(a))
+    assert (aug(X) == 0).all()
+
+    aug = LambdaAugmentation(lambda a, factor: factor*a, factor=2)
+    assert (aug(X) == 2*X).all()

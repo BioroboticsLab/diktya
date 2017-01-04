@@ -445,3 +445,22 @@ class GaussNoiseTransformation:
 
     def __call__(self, arr):
         return np.clip(arr + self.noise, -1, 1)
+
+
+class LambdaAugmentation(Augmentation):
+    def __init__(self, func, **params):
+        self.func = func
+        self.params = {k: _parse_parameter(v) for k, v in params.items()}
+
+    def get_transformation(self, shape):
+        transformation_params = {k: param() for k, param in self.params.items()}
+        return LambdaTransformation(self.func, transformation_params)
+
+
+class LambdaTransformation:
+    def __init__(self, func, params):
+        self.func = func
+        self.params = params
+
+    def __call__(self, arr):
+        return self.func(arr, **self.params)
