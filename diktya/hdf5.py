@@ -100,6 +100,8 @@ def iterate_hdf5(h5, batch_size, shuffle=False,
     """
     if fields is None:
         fields = list(h5.keys())
+
+    nb_iterations = nb_iterations or np.inf
     nb_samples = len(h5[fields[0]])
     indicies = np.arange(nb_samples)
     if shuffle:
