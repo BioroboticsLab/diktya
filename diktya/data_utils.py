@@ -14,6 +14,7 @@
 
 import numpy as np
 from collections import defaultdict
+from multiprocessing import Event, Process, Queue
 import h5py
 
 
@@ -66,3 +67,34 @@ def probabilistic_mean(tensor, nb_samples=10000, axis=0):
     idx = np.sort(np.random.choice(len(tensor), nb_samples, replace=False))
     samples = tensor[idx]
     return np.mean(samples, axis=axis, dtype=np.float64)
+
+
+def multiprocessing_generator(generator_factory, num_processes=1):
+    def generator_process(generator_factory, batch_queue, exit):
+        np.random.seed()
+        gen = generator_factory()
+
+        for value in gen:
+            queue.put(value)
+
+        exit.set()
+
+    queue = Queue(num_processes * 2)
+
+    exit_events = []
+    processes = []
+    for _ in range(num_processes):
+        exit_event = Event()
+        process = Process(target=generator_process, args=(generator_factory, queue, exit_event))
+        process.start()
+        exit_events.append(exit_event)
+        processes.append(process)
+
+    try:
+        while any([not e.is_set() for e in exit_events]) or not queue.empty():
+            yield queue.get()
+    except Exception as e:
+        print(e)
+
+    for process in processes:
+        process.join()
