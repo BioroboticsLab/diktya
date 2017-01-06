@@ -465,7 +465,7 @@ class SaveModelAndWeightsCheckpoint(Callback):
     def __init__(self, filepath, monitor='val_loss', verbose=0,
                  save_best_only=False, mode='auto', hdf5_attrs=None):
 
-        super(SaveModelAndWeightsCheckpoint, self).__init__()
+        super().__init__()
         self.monitor = monitor
         self.verbose = verbose
         self.filepath = filepath
@@ -492,6 +492,9 @@ class SaveModelAndWeightsCheckpoint(Callback):
                 self.monitor_op = np.less
                 self.best = np.Inf
 
+    def save_model(self, fname, overwrite=False, attrs={}):
+        save_model(self.model, fname, overwrite, attrs)
+
     def on_epoch_end(self, epoch, logs={}):
         filepath = self.filepath.format(epoch=epoch, **logs)
         if self.save_best_only:
@@ -507,7 +510,7 @@ class SaveModelAndWeightsCheckpoint(Callback):
                               % (epoch, self.monitor, self.best,
                                  current, filepath))
                     self.best = current
-                    save_model(self.model, filepath, overwrite=True, attrs=self.hdf5_attrs)
+                    self.save_model(filepath, overwrite=True, attrs=self.hdf5_attrs)
                 else:
                     if self.verbose > 0:
                         print('Epoch %05d: %s did not improve' %
@@ -515,4 +518,4 @@ class SaveModelAndWeightsCheckpoint(Callback):
         else:
             if self.verbose > 0:
                 print('Epoch %05d: saving model to %s' % (epoch, filepath))
-            save_model(self.model, filepath, overwrite=True, attrs=self.hdf5_attrs)
+            self.save_model(filepath, overwrite=True, attrs=self.hdf5_attrs)
