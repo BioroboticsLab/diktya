@@ -24,7 +24,7 @@ def scipy_gaussian_filter_2d(x, sigma=2/3.):
     return gaussian_filter1d(gaussian_filter1d(x, sigma, axis=-1), sigma, axis=-2)
 
 
-def tile(tiles, columns_must_be_multiple_of=1, border=0):
+def tile(tiles, columns_must_be_multiple_of=1, border=0, border_value=0):
     def calc_columns_rows(n):
         num_columns = int(ceil(sqrt(n)))
         if num_columns % columns_must_be_multiple_of != 0:
@@ -49,7 +49,7 @@ def tile(tiles, columns_must_be_multiple_of=1, border=0):
     else:
         raise ValueError("Only 2 or 3 dim input size are supported, got: {}"
                          .format(tile_size))
-    im = np.zeros(combined_size)
+    im = border_value * np.ones(combined_size)
     for r in range(rows):
         for c in range(cols):
             tile_idx = r*cols + c
@@ -60,7 +60,7 @@ def tile(tiles, columns_must_be_multiple_of=1, border=0):
     return im
 
 
-def zip_tile(*arrs):
+def zip_tile(*arrs, columns_must_be_multiple_of=None):
     assert len(arrs) >= 1
     length = len(arrs[0])
     for a in arrs:
@@ -70,7 +70,9 @@ def zip_tile(*arrs):
         for a in arrs:
             tiles.append(a[i])
 
-    tiled = tile(tiles, columns_must_be_multiple_of=len(arrs))
+    if columns_must_be_multiple_of is None:
+        columns_must_be_multiple_of = len(arrs)
+    tiled = tile(tiles, columns_must_be_multiple_of)
     assert len(tiled) == 1, "only grayscale image are supported"
     return tiled[0]
 
