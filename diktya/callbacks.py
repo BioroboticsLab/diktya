@@ -364,7 +364,7 @@ class HistoryPerBatch(Callback):
 
     def plot(self, metrics=None, fig=None, ax=None, skip_first_epoch=False,
              use_every_nth_batch=1, save_as=None, batch_window_size=128, percentile=(1, 99),
-             end=None,
+             end=None, kwargs=None,
              ):
         """
         Plots the losses and variance for every epoch.
@@ -388,7 +388,8 @@ class HistoryPerBatch(Callback):
             ax = fig.add_subplot(111)
         if metrics is None:
             metrics = self.metrics
-
+        if kwargs is None:
+            kwargs = {}
         if skip_first_epoch:
             start = 1
         else:
@@ -408,9 +409,12 @@ class HistoryPerBatch(Callback):
             values = values[::use_every_nth_batch]
             if len(values) < 1:
                 continue
-            plot_rolling_percentile((start, end), values, label=label,
+            label_kwargs = kwargs.get(label, {})
+            if 'label' not in label_kwargs:
+                label_kwargs['label'] = label
+            plot_rolling_percentile((start, end), values,
                                     batch_window_size=batch_window_size,
-                                    percentile=percentile, ax=ax)
+                                    percentile=percentile, ax=ax, **label_kwargs)
             has_batch_plot[label] = True
 
         for label, epochs in self.epoch_history.items():
@@ -418,7 +422,10 @@ class HistoryPerBatch(Callback):
                 continue
             nepochs = len(epochs)
             epoch_labels = np.arange(1, nepochs+1)
-            ax.plot(epoch_labels, epochs, label=label)
+            label_kwargs = kwargs.get(label, {})
+            if 'label' not in label_kwargs:
+                label_kwargs['label'] = label
+            ax.plot(epoch_labels, epochs, **label_kwargs)
 
         ax.legend()
         ax.set_xlabel('Epoch')

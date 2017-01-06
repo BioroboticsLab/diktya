@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 def plot_rolling_percentile(start_end, values, label=None,
                             batch_window_size=128, percentile=(1, 99),
                             percentile_alpha=0.5,
-                            ax=None, color=None):
+                            ax=None, color=None, **kwargs):
     start, end = start_end
     if ax is None:
         ax = plt
@@ -32,11 +32,13 @@ def plot_rolling_percentile(start_end, values, label=None,
     }
     rolling = pd.Series(values).rolling(**rolling_args)
     means = rolling.mean()
-    upper = pd.Series(rolling.apply(np.percentile, args=[percentile[1]]))
-    upper = upper.rolling(**rolling_args).mean()
-    lower = pd.Series(rolling.apply(np.percentile, args=[percentile[0]]))
-    lower = lower.rolling(**rolling_args).mean()
+
     epoch_labels = np.linspace(start, end, len(means))
-    base_line, = ax.plot(epoch_labels, means, label=label, color=color)
-    ax.fill_between(epoch_labels, lower, upper,
-                    facecolor=base_line.get_color(), alpha=percentile_alpha)
+    base_line, = ax.plot(epoch_labels, means, label=label, color=color, **kwargs)
+    if percentile is not None:
+        upper = pd.Series(rolling.apply(np.percentile, args=[percentile[1]]))
+        upper = upper.rolling(**rolling_args).mean()
+        lower = pd.Series(rolling.apply(np.percentile, args=[percentile[0]]))
+        lower = lower.rolling(**rolling_args).mean()
+        ax.fill_between(epoch_labels, lower, upper,
+                        facecolor=base_line.get_color(), alpha=percentile_alpha)
