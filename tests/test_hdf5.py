@@ -35,6 +35,14 @@ def test_hdf5(tmpdir):
             assert (batch[name] == data[name]).all()
     assert i == 2
 
+    for i, batch in enumerate(iterate_hdf5(h5, bs, start=2*bs, nb_iterations=1)):
+        pass
+    assert i == 0
+
+    for i, batch in enumerate(iterate_hdf5(h5, bs, start=0.50, nb_iterations=1)):
+        pass
+    assert i == 1
+
     for i, batch in enumerate(iterate_hdf5(h5, bs, nb_iterations=1, shuffle=True)):
         data = get_data(i)
         assert set(data.keys()) == set(batch.keys())

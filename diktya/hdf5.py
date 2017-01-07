@@ -87,7 +87,7 @@ def shuffle_hdf5(h5, output_fname, batch_size=100, print_progress=False):
     h5_shuffled.close()
 
 
-def iterate_hdf5(h5, batch_size, shuffle=False,
+def iterate_hdf5(h5, batch_size, shuffle=False, start=0,
                  nb_iterations=None, fields=None):
     """
     Iterates over HDF5 file ``h5``.
@@ -96,19 +96,26 @@ def iterate_hdf5(h5, batch_size, shuffle=False,
         batch_size (int):
         shuffle (int): randomly shuffle data
         nb_iterations (int): iterate that many times of the data sets. Defaulft is infinit times
+        start (int, float): Gives the start position if it is an ``int``.
+           Or if it is a ``float``, the start position as porpotion of the total number of samples.
         fields (list):  list of field names to yield
     """
     if fields is None:
         fields = list(h5.keys())
 
-    nb_iterations = nb_iterations or np.inf
     nb_samples = len(h5[fields[0]])
+
+    if type(start) == float:
+        assert 0 <= start < 1, "start must be in [0, 1). Got " + str(start)
+        start = int(start * nb_samples)
+
+    nb_iterations = nb_iterations or np.inf
     indicies = np.arange(nb_samples)
     if shuffle:
         np.random.shuffle(indicies)
     iterations_done = 0
     stop_iteration = 0
-    i = 0
+    i = start
     while True:
         size = batch_size
         batch = {name: [] for name in fields}
