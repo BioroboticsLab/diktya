@@ -141,6 +141,8 @@ class CropTransformation:
     def __init__(self, translation, crop_shape):
         if type(translation) == int:
             translation = (translation, translation)
+        if type(translation[0]) != int or type(translation[1]) != int:
+            raise Exception("Translation must be an integer! But got {}".format(translation))
         self.translation = translation
         self.crop_shape = crop_shape
 
