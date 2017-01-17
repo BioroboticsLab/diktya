@@ -165,3 +165,15 @@ def print_attrs(h5):
         shape = arr.shape
         shape_str = str(shape)
         print("{:14}| {:20} |".format(name, shape_str), arr.dtype)
+
+
+def get_hdf5_attr(fname, attr_name):
+    """Gets an attribute from the given hdf5 file"""
+    with h5py.File(fname, 'r') as h5:
+        return h5.attrs[attr_name]
+
+
+def set_hdf5_attr(fname, attr_name, value):
+    """Sets an attribute for the given hdf5 file"""
+    with h5py.File(fname, 'r+') as h5:
+        h5.attrs[attr_name] = value
