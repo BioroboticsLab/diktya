@@ -188,7 +188,7 @@ class LearningRateScheduler(Callback):
 
     Args:
        optimizer (keras Optimizer): schedule the learning rate of this optimizer
-       schedule
+       schedule (dict): Dictionary of epoch -> lr_value
     """
 
     def __init__(self, optimizer, schedule):
