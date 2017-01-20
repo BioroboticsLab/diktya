@@ -133,7 +133,7 @@ class CropAugmentation(Augmentation):
         self.crop_shape = crop_shape
 
     def get_transformation(self, shape):
-        return CropTransformation([self.translation(), self.translation()],
+        return CropTransformation([int(self.translation()), int(self.translation())],
                                   self.crop_shape)
 
 
@@ -175,7 +175,7 @@ class HistEqualization:
 
 
 class ChannelScaleShiftAugmentation(Augmentation):
-    def __init__(self, scale, shift, min=-1, max=1):
+    def __init__(self, scale, shift, min=-1, max=1, per_channel=True):
         """
         Augments a image by scaling and shifts its channels.
         """
@@ -183,13 +183,18 @@ class ChannelScaleShiftAugmentation(Augmentation):
         self.shift = _parse_parameter(shift)
         self.min = min
         self.max = max
+        self.per_channel = per_channel
 
     def get_transformation(self, shape):
         if len(shape) != 3:
             raise Exception("Shape must be 3-dimensional. Got {}.".format(shape))
         nb_channels = shape[0]
-        shift = [self.shift() for _ in range(nb_channels)]
-        scale = [self.scale() for _ in range(nb_channels)]
+        if self.per_channel:
+            shift = [self.shift() for _ in range(nb_channels)]
+            scale = [self.scale() for _ in range(nb_channels)]
+        else:
+            shift = [self.shift()] * nb_channels
+            scale = [self.scale()] * nb_channels
         return ChannelScaleShiftTransformation(scale, shift, self.min, self.max)
 
 
@@ -291,7 +296,8 @@ class WarpAugmentation(Augmentation):
         return WarpTransformation(
             bool(random.random() < self.flipv_probability()),
             bool(random.random() < self.fliph_probability()),
-            self.translation(), self.rotation(),
+            (self.translation(), self.translation()),
+            self.rotation(),
             scale, self.shear(),
             diffeomorphism, self.diff_fix_border(),
             self.fill_mode,
