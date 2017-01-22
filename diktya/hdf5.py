@@ -152,7 +152,7 @@ def print_datasets(h5, batch_size=100):
     for name, arr in batch.items():
         shape = arr.shape
         if shape[0] == batch_size:
-            shape_str = "(bs, {})".format(", ".join([str(s) for s in shape[1:]]))
+            shape_str = "({})".format(", ".join([str(s) for s in shape]))
         else:
             shape_str = str(shape)
         print("{:14}| {:20} |".format(name, shape_str), arr.dtype)
